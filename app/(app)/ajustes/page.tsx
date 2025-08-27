@@ -7,13 +7,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Settings, Save, Target, Bell, Clock, User } from 'lucide-react'
 import { MacroGoals } from '@/lib/utils'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/supabase'
 
 type UserSettings = Database['public']['Tables']['users']['Row']
 type UserGoals = Database['public']['Tables']['goals']['Row']
 
+const supabase = createClientComponentClient<Database>()
+
 export default function AjustesPage() {
-  const { user, supabase } = useSupabase()
+  const { user } = useSupabase()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [userSettings, setUserSettings] = useState<UserSettings | null>(null)
@@ -54,7 +57,7 @@ export default function AjustesPage() {
       }
 
       // Cargar objetivos del usuario
-      const { data: goalsData, error: goalsError } = await supabase
+      const { data: goalsResponse, error: goalsError } = await supabase
         .from('goals')
         .select()
         .eq('user_id', user.id)
@@ -69,13 +72,15 @@ export default function AjustesPage() {
         setUserSettings(settingsData)
       }
       
-      if (goalsData) {
-        setUserGoals(goalsData)
+      const typedGoalsData = goalsResponse as Database['public']['Tables']['goals']['Row'] | null;
+      
+      if (typedGoalsData) {
+        setUserGoals(typedGoalsData)
         setGoalsData({
-          kcal: goalsData.kcal || 2000,
-          protein: goalsData.protein || 150,
-          carbs: goalsData.carbs || 200,
-          fat: goalsData.fat || 65
+          kcal: typedGoalsData.kcal || 2000,
+          protein: typedGoalsData.protein || 150,
+          carbs: typedGoalsData.carbs || 200,
+          fat: typedGoalsData.fat || 65
         })
       }
     } catch (error) {
@@ -90,20 +95,25 @@ export default function AjustesPage() {
       setSaving(true)
       if (!user?.id) return
 
-      const goalData = {
-        kcal: goalsData.kcal,
-        protein: goalsData.protein,
-        carbs: goalsData.carbs,
-        fat: goalsData.fat
+      const requiredGoalData = {
+        kcal: Number(goalsData.kcal),
+        protein: Number(goalsData.protein),
+        carbs: Number(goalsData.carbs),
+        fat: Number(goalsData.fat)
       }
       
       if (userGoals?.id) {
         // Actualizar objetivos existentes
         const { error } = await supabase
           .from('goals')
-          .update(goalData)
+          .update({
+            kcal: requiredGoalData.kcal,
+            protein: requiredGoalData.protein,
+            carbs: requiredGoalData.carbs,
+            fat: requiredGoalData.fat
+          })
           .eq('id', userGoals.id)
-          .eq('user_id', user.id) // Seguridad adicional
+          .eq('user_id', user.id)
 
         if (error) {
           console.error('Error updating goals:', error)
@@ -114,8 +124,11 @@ export default function AjustesPage() {
         const { data, error } = await supabase
           .from('goals')
           .insert({
-            ...goalData,
-            user_id: user.id
+            user_id: user.id,
+            kcal: requiredGoalData.kcal,
+            protein: requiredGoalData.protein,
+            carbs: requiredGoalData.carbs,
+            fat: requiredGoalData.fat
           })
           .select()
           .single()
@@ -130,8 +143,8 @@ export default function AjustesPage() {
         }
       }
 
-      // Actualizar estado local
-      setGoalsData(goalData)
+      // Actualizar estado local solo con los campos necesarios
+      setGoalsData(requiredGoalData)
       
       // Notificar éxito sin usar alert
       // TODO: Implementar un toast o notificación más elegante
