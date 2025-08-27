@@ -7,24 +7,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Settings, Save, Target, Bell, Clock, User } from 'lucide-react'
 import { MacroGoals } from '@/lib/utils'
+import type { Database } from '@/types/supabase'
 
-interface UserSettings {
-  id: string
-  email: string
-  tz: string
-  created_at: string
-}
-
-interface UserGoals {
-  id: string
-  user_id: string
-  kcal: number
-  protein: number
-  carbs: number
-  fat: number
-  created_at: string
-  updated_at: string
-}
+type UserSettings = Database['public']['Tables']['users']['Row']
+type UserGoals = Database['public']['Tables']['goals']['Row']
 
 export default function AjustesPage() {
   const { user, supabase } = useSupabase()
@@ -50,39 +36,46 @@ export default function AjustesPage() {
     }
   }, [user])
 
-  // 1) Mantén tus interfaces arriba (UserSettings, UserGoals, MacroGoals)
-
   const loadUserData = async () => {
     try {
       setLoading(true)
-      if (!user) return
-
-      // Configuración del usuario
-      const { data: settingsData } = await supabase
+      if (!user?.id) return
+      
+      // Cargar configuración del usuario
+      const { data: settingsData, error: settingsError } = await supabase
         .from('users')
-        .select('*')
+        .select()
         .eq('id', user.id)
         .single()
 
-      // Objetivos del usuario (OJO: renombrado y tipado explícito)
-      const goalsResp = await supabase
+      if (settingsError && settingsError.code !== 'PGRST116') {
+        console.error('Error loading settings:', settingsError)
+        return
+      }
+
+      // Cargar objetivos del usuario
+      const { data: goalsData, error: goalsError } = await supabase
         .from('goals')
-        .select('id,user_id,kcal,protein,carbs,fat,created_at,updated_at')
+        .select()
         .eq('user_id', user.id)
-        .maybeSingle() // evita throw si no hay fila
+        .single()
 
-      setUserSettings(settingsData ?? null)
+      if (goalsError && goalsError.code !== 'PGRST116') {
+        console.error('Error loading goals:', goalsError)
+        return
+      }
 
-      if (goalsResp.data) {
-        // Forzamos el tipo a tu interfaz
-        const g = goalsResp.data as UserGoals
-
-        setUserGoals(g)
+      if (settingsData) {
+        setUserSettings(settingsData)
+      }
+      
+      if (goalsData) {
+        setUserGoals(goalsData)
         setGoalsData({
-          kcal: g.kcal,
-          protein: g.protein,
-          carbs: g.carbs,
-          fat: g.fat
+          kcal: goalsData.kcal || 2000,
+          protein: goalsData.protein || 150,
+          carbs: goalsData.carbs || 200,
+          fat: goalsData.fat || 65
         })
       }
     } catch (error) {
@@ -92,52 +85,65 @@ export default function AjustesPage() {
     }
   }
 
+  const saveGoals = async () => {
+    try {
+      setSaving(true)
+      if (!user?.id) return
 
-  // const saveGoals = async () => {
-  //   try {
-  //     setSaving(true)
-  //     if (!user) return
+      const goalData = {
+        kcal: goalsData.kcal,
+        protein: goalsData.protein,
+        carbs: goalsData.carbs,
+        fat: goalsData.fat
+      }
       
-  //     if (userGoals) {
-  //       // Actualizar objetivos existentes
-  //       const { error } = await supabase
-  //         .from('goals')
-  //         .update({
-  //           kcal: goalsData.kcal,
-  //           protein: goalsData.protein,
-  //           carbs: goalsData.carbs,
-  //           fat: goalsData.fat
-  //         })
-  //         .eq('id', userGoals.id)
+      if (userGoals?.id) {
+        // Actualizar objetivos existentes
+        const { error } = await supabase
+          .from('goals')
+          .update(goalData)
+          .eq('id', userGoals.id)
+          .eq('user_id', user.id) // Seguridad adicional
 
-  //       if (error) throw error
-  //     } else {
-  //       // Crear nuevos objetivos
-  //       const { data, error } = await supabase
-  //         .from('goals')
-  //         .insert({
-  //           user_id: user.id,
-  //           kcal: goalsData.kcal,
-  //           protein: goalsData.protein,
-  //           carbs: goalsData.carbs,
-  //           fat: goalsData.fat
-  //         })
-  //         .select()
-  //         .single()
+        if (error) {
+          console.error('Error updating goals:', error)
+          throw new Error('No se pudieron actualizar los objetivos')
+        }
+      } else {
+        // Crear nuevos objetivos
+        const { data, error } = await supabase
+          .from('goals')
+          .insert({
+            ...goalData,
+            user_id: user.id
+          })
+          .select()
+          .single()
 
-  //       if (error) throw error
-  //       setUserGoals(data)
-  //     }
+        if (error) {
+          console.error('Error creating goals:', error)
+          throw new Error('No se pudieron crear los objetivos')
+        }
+        
+        if (data) {
+          setUserGoals(data)
+        }
+      }
 
-  //     // Mostrar mensaje de éxito
-  //     alert('Objetivos guardados correctamente')
-  //   } catch (error) {
-  //     console.error('Error saving goals:', error)
-  //     alert('Error al guardar los objetivos')
-  //   } finally {
-  //     setSaving(false)
-  //   }
-  // }
+      // Actualizar estado local
+      setGoalsData(goalData)
+      
+      // Notificar éxito sin usar alert
+      // TODO: Implementar un toast o notificación más elegante
+      console.log('Objetivos guardados correctamente')
+    } catch (error) {
+      console.error('Error saving goals:', error)
+      // TODO: Implementar un toast o notificación más elegante para errores
+      console.error('Error al guardar los objetivos:', error instanceof Error ? error.message : 'Error desconocido')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const calculateMacroPercentages = () => {
     const totalKcal = goalsData.protein * 4 + goalsData.carbs * 4 + goalsData.fat * 9
