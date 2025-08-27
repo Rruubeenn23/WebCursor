@@ -1,0 +1,199 @@
+{
+  "name": "Meal Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minute",
+              "expression": "*/15"
+            }
+          ]
+        }
+      },
+      "id": "cron-trigger",
+      "name": "15min Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.BASE_URL }}/api/plans/today",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-today-plan",
+      "name": "Get Today Plan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter meals that are due in the next 15 minutes and not done\nconst now = new Date();\nconst currentTime = now.getHours() * 60 + now.getMinutes();\nconst next15min = currentTime + 15;\n\nconst upcomingMeals = $json.mealItems.filter(meal => {\n  const [hours, minutes] = meal.time.split(':').map(Number);\n  const mealTime = hours * 60 + minutes;\n  return mealTime >= currentTime && mealTime <= next15min && !meal.done;\n});\n\nreturn upcomingMeals.map(meal => ({\n  json: {\n    ...meal,\n    goals: $json.goals,\n    dayPlan: $json.dayPlan\n  }\n}));"
+      },
+      "id": "filter-meals",
+      "name": "Filter Upcoming Meals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-meals",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-meals",
+      "name": "Check if Meals Due",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $env.TELEGRAM_CHAT_ID }}"
+            },
+            {
+              "name": "text",
+              "value": "🍽️ Recordatorio de comida\n\n{{ $json.food.name }} - {{ $json.qty_units }} {{ $json.food.unit }}\n⏰ {{ $json.time }}\n\nHora de comer! 🎯"
+            },
+            {
+              "name": "parse_mode",
+              "value": "HTML"
+            },
+            {
+              "name": "reply_markup",
+              "value": "{\"inline_keyboard\":[[{\"text\":\"✅ Marcar como hecho\",\"callback_data\":\"meal_done_{{ $json.id }}\"}]],\"resize_keyboard\":true}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-reminder",
+      "name": "Send Meal Reminder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/setWebhook",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "url",
+              "value": "={{ $env.BASE_URL }}/api/webhooks/telegram"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "setup-webhook",
+      "name": "Setup Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "15min Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Today Plan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today Plan": {
+      "main": [
+        [
+          {
+            "node": "Filter Upcoming Meals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Upcoming Meals": {
+      "main": [
+        [
+          {
+            "node": "Check if Meals Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Meals Due": {
+      "main": [
+        [
+          {
+            "node": "Send Meal Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Setup Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
