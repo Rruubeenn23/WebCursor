@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabase } from '@/components/providers/supabase-provider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send, Bot, User, Plus, Save } from 'lucide-react'
 import { MacroGoals } from '@/lib/utils'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { type Database } from '@/types/supabase'
+
+const supabaseClient = createClientComponentClient<Database>()
 
 interface ChatMessage {
   id: string
@@ -18,23 +21,22 @@ interface ChatMessage {
   qty?: number
 }
 
-interface FoodItem {
-  id: string
-  name: string
-  kcal: number
-  protein_g: number
-  carbs_g: number
-  fat_g: number
-  unit: string
-  grams_per_unit: number
-}
+type FoodItem = Database['public']['Tables']['foods']['Row'];
 
 export default function ChatbotPage() {
-  const { user, supabase } = useSupabase()
+  const [user, setUser] = useState<any>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [suggestedFood, setSuggestedFood] = useState<FoodItem | null>(null)
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user: currentUser } } = await supabaseClient.auth.getUser()
+      setUser(currentUser)
+    }
+    fetchUser()
+  }, [])
 
   useEffect(() => {
     if (user) {
@@ -116,21 +118,29 @@ export default function ChatbotPage() {
     }
   }
 
-  const saveFoodToDatabase = async (food: FoodItem) => {
+  const saveFoodToDatabase = async (foodData: {
+    name: string;
+    kcal: number;
+    protein_g: number;
+    carbs_g: number;
+    fat_g: number;
+    unit: string;
+    grams_per_unit: number;
+  }) => {
     if (!user) return
 
     try {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('foods')
-        .insert({
-          name: food.name,
-          kcal: food.kcal,
-          protein_g: food.protein_g,
-          carbs_g: food.carbs_g,
-          fat_g: food.fat_g,
-          unit: food.unit,
-          grams_per_unit: food.grams_per_unit
-        })
+        .insert([{
+          name: foodData.name,
+          kcal: foodData.kcal,
+          protein_g: foodData.protein_g,
+          carbs_g: foodData.carbs_g,
+          fat_g: foodData.fat_g,
+          unit: foodData.unit,
+          grams_per_unit: foodData.grams_per_unit
+        }])
 
       if (error) throw error
 
@@ -138,7 +148,7 @@ export default function ChatbotPage() {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `✅ "${food.name}" ha sido guardado en la base de datos. Ahora podrás usarlo en tus templates de comidas.`,
+        content: `✅ "${foodData.name}" ha sido guardado en la base de datos. Ahora podrás usarlo en tus templates de comidas.`,
         timestamp: new Date()
       }])
     } catch (error) {
