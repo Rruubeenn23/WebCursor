@@ -50,34 +50,39 @@ export default function AjustesPage() {
     }
   }, [user])
 
+  // 1) Mantén tus interfaces arriba (UserSettings, UserGoals, MacroGoals)
+
   const loadUserData = async () => {
     try {
       setLoading(true)
       if (!user) return
-      
-      // Cargar configuración del usuario
+
+      // Configuración del usuario
       const { data: settingsData } = await supabase
         .from('users')
         .select('*')
         .eq('id', user.id)
         .single()
 
-      // Cargar objetivos del usuario
-      const { data: goalsData } = await supabase
+      // Objetivos del usuario (OJO: renombrado y tipado explícito)
+      const goalsResp = await supabase
         .from('goals')
-        .select('*')
+        .select('id,user_id,kcal,protein,carbs,fat,created_at,updated_at')
         .eq('user_id', user.id)
-        .single()
+        .maybeSingle() // evita throw si no hay fila
 
-      setUserSettings(settingsData)
-      
-      if (goalsData) {
-        setUserGoals(goalsData)
+      setUserSettings(settingsData ?? null)
+
+      if (goalsResp.data) {
+        // Forzamos el tipo a tu interfaz
+        const g = goalsResp.data as UserGoals
+
+        setUserGoals(g)
         setGoalsData({
-          kcal: goalsData.kcal,
-          protein: goalsData.protein,
-          carbs: goalsData.carbs,
-          fat: goalsData.fat
+          kcal: g.kcal,
+          protein: g.protein,
+          carbs: g.carbs,
+          fat: g.fat
         })
       }
     } catch (error) {
@@ -87,51 +92,52 @@ export default function AjustesPage() {
     }
   }
 
-  const saveGoals = async () => {
-    try {
-      setSaving(true)
-      if (!user) return
+
+  // const saveGoals = async () => {
+  //   try {
+  //     setSaving(true)
+  //     if (!user) return
       
-      if (userGoals) {
-        // Actualizar objetivos existentes
-        const { error } = await supabase
-          .from('goals')
-          .update({
-            kcal: goalsData.kcal,
-            protein: goalsData.protein,
-            carbs: goalsData.carbs,
-            fat: goalsData.fat
-          })
-          .eq('id', userGoals.id)
+  //     if (userGoals) {
+  //       // Actualizar objetivos existentes
+  //       const { error } = await supabase
+  //         .from('goals')
+  //         .update({
+  //           kcal: goalsData.kcal,
+  //           protein: goalsData.protein,
+  //           carbs: goalsData.carbs,
+  //           fat: goalsData.fat
+  //         })
+  //         .eq('id', userGoals.id)
 
-        if (error) throw error
-      } else {
-        // Crear nuevos objetivos
-        const { data, error } = await supabase
-          .from('goals')
-          .insert({
-            user_id: user.id,
-            kcal: goalsData.kcal,
-            protein: goalsData.protein,
-            carbs: goalsData.carbs,
-            fat: goalsData.fat
-          })
-          .select()
-          .single()
+  //       if (error) throw error
+  //     } else {
+  //       // Crear nuevos objetivos
+  //       const { data, error } = await supabase
+  //         .from('goals')
+  //         .insert({
+  //           user_id: user.id,
+  //           kcal: goalsData.kcal,
+  //           protein: goalsData.protein,
+  //           carbs: goalsData.carbs,
+  //           fat: goalsData.fat
+  //         })
+  //         .select()
+  //         .single()
 
-        if (error) throw error
-        setUserGoals(data)
-      }
+  //       if (error) throw error
+  //       setUserGoals(data)
+  //     }
 
-      // Mostrar mensaje de éxito
-      alert('Objetivos guardados correctamente')
-    } catch (error) {
-      console.error('Error saving goals:', error)
-      alert('Error al guardar los objetivos')
-    } finally {
-      setSaving(false)
-    }
-  }
+  //     // Mostrar mensaje de éxito
+  //     alert('Objetivos guardados correctamente')
+  //   } catch (error) {
+  //     console.error('Error saving goals:', error)
+  //     alert('Error al guardar los objetivos')
+  //   } finally {
+  //     setSaving(false)
+  //   }
+  // }
 
   const calculateMacroPercentages = () => {
     const totalKcal = goalsData.protein * 4 + goalsData.carbs * 4 + goalsData.fat * 9
