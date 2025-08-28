@@ -6,8 +6,12 @@ import { useSupabase } from '@/components/providers/supabase-provider'
 import { MacroCard } from '@/components/nutrition/macro-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle, Circle, Clock, Utensils } from 'lucide-react'
+import { CheckCircle, Circle, Clock, Utensils, Plus } from 'lucide-react'
 import { MacroGoals, getCurrentDate, formatTime } from '@/lib/utils'
+import { AddMealDialog } from './add-meal-dialog'
+import type { Database } from '@/types/database'
+
+type SupabaseClient = ReturnType<typeof useSupabase>['supabase']
 
 interface DayPlanItem {
   id: string
@@ -31,6 +35,7 @@ interface TodayData {
   consumed: MacroGoals
   meals: DayPlanItem[]
   trainingDay: boolean
+  planId?: string
 }
 
 // Fallback por si no hay goals en BD
@@ -39,9 +44,11 @@ const DEFAULT_GOALS: MacroGoals = { kcal: 2000, protein: 150, carbs: 200, fat: 6
 export default function TodayPage() {
   const router = useRouter()
   const { user, supabase } = useSupabase()
+  const supabaseClient = supabase as any
   const [userId, setUserId] = useState<string | null>(null)
   const [data, setData] = useState<TodayData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [addMealOpen, setAddMealOpen] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -54,6 +61,48 @@ export default function TodayPage() {
     loadTodayData(user.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
+
+  const handleAddMeal = async (foodId: string, qtyUnits: number, time: string) => {
+    try {
+      if (!data?.goals || !user) return
+
+      const today = getCurrentDate()
+      
+      // Primero asegurarse de que existe un plan para hoy
+      let planId = data.planId
+      if (!planId) {
+        const { data: newPlan, error: planError } = await supabaseClient
+          .from('day_plans')
+          .insert({
+            user_id: user.id,
+            date: today,
+            training_day: false
+          })
+          .select('id')
+          .single()
+
+        if (planError) throw planError
+        planId = newPlan?.id
+      }
+
+      // Añadir el nuevo item
+      const { error: itemError } = await supabaseClient
+        .from('day_plan_items')
+        .insert({
+          day_plan_id: planId,
+          food_id: foodId,
+          qty_units: qtyUnits,
+          time: time
+        })
+
+      if (itemError) throw itemError
+
+      // Recargar los datos
+      loadTodayData(user.id)
+    } catch (error) {
+      console.error('Error adding meal:', error)
+    }
+  }
 
   const loadTodayData = async (uid: string) => {
     try {
@@ -138,6 +187,7 @@ export default function TodayPage() {
         consumed,
         meals,
         trainingDay: Boolean(planData?.training_day),
+        planId: planData?.id
       })
     } catch (error) {
       console.error('Error loading today data:', error)
@@ -149,10 +199,9 @@ export default function TodayPage() {
 
   const toggleMealDone = async (itemId: string, done: boolean) => {
     try {
-      // Evitamos el "never" tipando la llamada como any
-      await (supabase as any)
+      await supabaseClient
         .from('day_plan_items')
-        .update({ done } as any)
+        .update({ done })
         .eq('id', itemId)
 
       if (userId) await loadTodayData(userId)
@@ -209,8 +258,12 @@ export default function TodayPage() {
         {/* Meals */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Comidas del día</CardTitle>
+              <Button size="sm" onClick={() => setAddMealOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Añadir Comida
+              </Button>
             </CardHeader>
             <CardContent>
               {data.meals.length === 0 ? (
@@ -266,6 +319,13 @@ export default function TodayPage() {
           </Card>
         </div>
       </div>
+
+      <AddMealDialog
+        open={addMealOpen}
+        onOpenChange={setAddMealOpen}
+        onAddMeal={handleAddMeal}
+        planId={data?.planId || ''}
+      />
     </div>
   )
 }
