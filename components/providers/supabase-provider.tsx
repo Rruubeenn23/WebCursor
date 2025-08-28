@@ -17,19 +17,31 @@ export function SupabaseProvider({
 }: {
   children: React.ReactNode
 }) {
-  const [supabase] = useState(() => createClientComponentClient<Database>({
-    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  }))
+  const [supabase] = useState(() => createClientComponentClient<Database>())
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+    let authListener: { subscription: { unsubscribe: () => void } } | null = null
+
+    async function setupAuthListener() {
+      const { data } = await supabase.auth.getUser()
+      setUser(data.user)
+
+      const { data: authData } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          setUser(session?.user ?? null)
+        }
+      )
+      authListener = authData
     }
 
-    getUser()
+    setupAuthListener()
+
+    return () => {
+      if (authListener) {
+        authListener.subscription.unsubscribe()
+      }
+    }
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
