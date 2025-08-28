@@ -101,6 +101,27 @@ export default function ComidasPage() {
     try {
       if (!user) return
       
+      // Asegurarnos de que el usuario existe en la tabla users
+      const { data: existingUser, error: userCheckError } = await supabaseClient
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single()
+
+      if (!existingUser) {
+        const { error: insertUserError } = await supabaseClient
+          .from('users')
+          .insert([{
+            id: user.id,
+            email: user.email
+          }])
+
+        if (insertUserError) {
+          console.error('Error creating user:', insertUserError)
+          throw insertUserError
+        }
+      }
+      
       const newTemplate: Database['public']['Tables']['meal_templates']['Insert'] = {
         user_id: user.id,
         name: templateData.name,
