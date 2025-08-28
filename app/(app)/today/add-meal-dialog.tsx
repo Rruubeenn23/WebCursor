@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import {
@@ -8,67 +8,80 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from '@/components/ui/dialog'
 
 import type { Database } from '@/types/database'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-interface Food {
+
+interface Template {
   id: string
   name: string
-  unit: string
-  kcal: number
-  protein_g: number
-  carbs_g: number
-  fat_g: number
-  grams_per_unit: number
 }
 
 interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAddMeal: (foodId: string, qtyUnits: number, time: string) => Promise<void>
-  planId: string
+  date: string           // fecha para el day_plan (YYYY-MM-DD)
+  userId: string         // id del usuario autenticado
+  onCreated?: () => void // callback opcional para recargar desde el padre
 }
 
-export function AddMealDialog({ open, onOpenChange, onAddMeal, planId }: Props) {
-  const [foods, setFoods] = useState<Food[]>([])
-  const [selectedFood, setSelectedFood] = useState('')
-  const [quantity, setQuantity] = useState('1')
-  const [time, setTime] = useState(new Date().toTimeString().slice(0, 5))
+export function AddMealDialog({ open, onOpenChange, date, userId, onCreated }: Props) {
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [notes, setNotes] = useState('')
+  const [trainingDay, setTrainingDay] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const supabase = createClientComponentClient<Database>()
 
   useEffect(() => {
-    loadFoods()
-  }, [])
+    if (!open) return
+    loadTemplates()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
-  const loadFoods = async () => {
+  const loadTemplates = async () => {
     try {
-      const { data: foodsData } = await supabase
-        .from('foods')
-        .select('*')
-        .order('name')
+      const { data, error } = await supabase
+        .from('meal_templates')
+        .select('id, name')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
 
-      setFoods(foodsData || [])
+      if (error) throw error
+      setTemplates(data || [])
     } catch (error) {
-      console.error('Error loading foods:', error)
+      console.error('Error loading templates:', error)
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedFood || !quantity || !time) return
+    if (!selectedTemplate) return
 
     setLoading(true)
     try {
-      await onAddMeal(selectedFood, Number(quantity), time)
+      const { error } = await supabase
+        .from('day_plans')
+        .insert({
+          user_id: userId,
+          date,
+          training_day: trainingDay,
+          notes: notes || null,
+          template_id: selectedTemplate
+        })
+
+      if (error) throw error
+
       onOpenChange(false)
-      setSelectedFood('')
-      setQuantity('1')
-      setTime(new Date().toTimeString().slice(0, 5))
+      onCreated?.()
+      // Reset campos
+      setSelectedTemplate('')
+      setNotes('')
+      setTrainingDay(false)
     } catch (error) {
-      console.error('Error adding meal:', error)
+      console.error('Error creating day plan:', error)
     } finally {
       setLoading(false)
     }
@@ -78,46 +91,58 @@ export function AddMealDialog({ open, onOpenChange, onAddMeal, planId }: Props) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Añadir Comida</DialogTitle>
+          <DialogTitle>Añadir Plan de Comida</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Alimento</label>
+            <label className="text-sm font-medium">Plantilla</label>
             <select
               className="w-full px-3 py-2 border rounded-md"
-              value={selectedFood}
-              onChange={(e) => setSelectedFood(e.target.value)}
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(e.target.value)}
               required
             >
-              <option value="">Selecciona un alimento</option>
-              {foods.map((food) => (
-                <option key={food.id} value={food.id}>
-                  {food.name} ({food.unit})
+              <option value="">Selecciona una plantilla</option>
+              {templates.map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>
+                  {tpl.name}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Cantidad</label>
+            <label className="text-sm font-medium">Notas</label>
             <Input
-              type="number"
-              min="0.1"
-              step="0.1"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
+              type="text"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Opcional (p.ej. cardio 30min)"
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Hora</label>
-            <Input
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              required
-            />
+            <label className="text-sm font-medium">Tipo de día</label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={trainingDay ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTrainingDay(true)}
+                className="flex-1"
+              >
+                Entrenamiento
+              </Button>
+              <Button
+                type="button"
+                variant={!trainingDay ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setTrainingDay(false)}
+                className="flex-1"
+              >
+                Descanso
+              </Button>
+            </div>
           </div>
 
           <div className="flex gap-2 justify-end">
@@ -125,7 +150,7 @@ export function AddMealDialog({ open, onOpenChange, onAddMeal, planId }: Props) 
               Cancelar
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Añadiendo...' : 'Añadir'}
+              {loading ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>
         </form>

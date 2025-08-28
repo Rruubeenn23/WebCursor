@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button'
 import { CheckCircle, Circle, Clock, Utensils, Plus } from 'lucide-react'
 import { MacroGoals, getCurrentDate, formatTime } from '@/lib/utils'
 import { AddMealDialog } from './add-meal-dialog'
-import type { Database } from '@/types/database'
 
 type SupabaseClient = ReturnType<typeof useSupabase>['supabase']
 
@@ -62,54 +61,12 @@ export default function TodayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
-  const handleAddMeal = async (foodId: string, qtyUnits: number, time: string) => {
-    try {
-      if (!data?.goals || !user) return
-
-      const today = getCurrentDate()
-      
-      // Primero asegurarse de que existe un plan para hoy
-      let planId = data.planId
-      if (!planId) {
-        const { data: newPlan, error: planError } = await supabaseClient
-          .from('day_plans')
-          .insert({
-            user_id: user.id,
-            date: today,
-            training_day: false
-          })
-          .select('id')
-          .single()
-
-        if (planError) throw planError
-        planId = newPlan?.id
-      }
-
-      // Añadir el nuevo item
-      const { error: itemError } = await supabaseClient
-        .from('day_plan_items')
-        .insert({
-          day_plan_id: planId,
-          food_id: foodId,
-          qty_units: qtyUnits,
-          time: time
-        })
-
-      if (itemError) throw itemError
-
-      // Recargar los datos
-      loadTodayData(user.id)
-    } catch (error) {
-      console.error('Error adding meal:', error)
-    }
-  }
-
   const loadTodayData = async (uid: string) => {
     try {
       setLoading(true)
       const today = getCurrentDate()
 
-      // Goals (sin genéricos; casteo el resultado)
+      // Goals
       const goalsResp = await supabaseClient
         .from('goals')
         .select()
@@ -117,7 +74,7 @@ export default function TodayPage() {
         .single()
       const goalsData = (goalsResp.data as Partial<MacroGoals> | null) ?? null
 
-      // Plan del día (pedimos solo columnas necesarias)
+      // Plan del día
       const planResp = await supabase
         .from('day_plans')
         .select('id, training_day')
@@ -130,7 +87,6 @@ export default function TodayPage() {
       const consumed: MacroGoals = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
 
       if (planData?.id) {
-        // Items del plan
         const itemsResp = await supabase
           .from('day_plan_items')
           .select(`
@@ -320,12 +276,16 @@ export default function TodayPage() {
         </div>
       </div>
 
-      <AddMealDialog
-        open={addMealOpen}
-        onOpenChange={setAddMealOpen}
-        onAddMeal={handleAddMeal}
-        planId={data?.planId || ''}
-      />
+      {/* Renderiza el diálogo solo si hay userId */}
+      {userId && (
+        <AddMealDialog
+          open={addMealOpen}
+          onOpenChange={setAddMealOpen}
+          date={getCurrentDate()}
+          userId={userId}
+          onCreated={() => loadTodayData(userId)}
+        />
+      )}
     </div>
   )
 }
