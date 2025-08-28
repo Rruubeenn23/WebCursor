@@ -144,7 +144,7 @@ export default function ComidasPage() {
             template_id: template.id,
             food_id: item.food_id,
             qty_units: item.qty_units,
-            time_hint: item.time_hint || null
+            time_hint: item.time_hint ? `${item.time_hint.padStart(2, '0')}:00:00` : null
           }))
 
         const { error: itemsError } = await supabaseClient

@@ -27,6 +27,7 @@ export default function PlanPage() {
   const [weekPlan, setWeekPlan] = useState<WeekPlan>({})
   const [loading, setLoading] = useState(true)
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [planData, setPlanData] = useState({
     training_day: false,
     notes: '',
@@ -36,8 +37,25 @@ export default function PlanPage() {
   useEffect(() => {
     if (user) {
       loadWeekPlan()
+      loadTemplates()
     }
   }, [user])
+
+  const loadTemplates = async () => {
+    try {
+      if (!user) return
+      
+      const { data } = await supabaseClient
+        .from('meal_templates')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+
+      setTemplates(data || [])
+    } catch (error) {
+      console.error('Error loading templates:', error)
+    }
+  }
 
   const loadWeekPlan = async () => {
     try {
@@ -296,6 +314,22 @@ export default function PlanPage() {
                     Descanso
                   </Button>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Plantilla de Comida</label>
+                <select
+                  className="w-full px-3 py-2 border rounded-md"
+                  value={planData.template_id}
+                  onChange={(e) => setPlanData(prev => ({ ...prev, template_id: e.target.value }))}
+                >
+                  <option value="">Selecciona una plantilla</option>
+                  {templates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-2">
