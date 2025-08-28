@@ -6,18 +6,22 @@ import { useSupabase } from '@/components/providers/supabase-provider'
 import { MacroCard } from '@/components/nutrition/macro-card'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { CheckCircle, Circle, Clock, Utensils, Plus } from 'lucide-react'
+import { CheckCircle, Circle, Clock, Utensils } from 'lucide-react'
 import { MacroGoals, getCurrentDate, formatTime } from '@/lib/utils'
-import { AddMealDialog } from './add-meal-dialog'
+import type { Database } from '@/types/database'
+import TodayFab from './fab'
+import QuickAddDialog from './quick-add-dialog'
+import AddFoodDialog from './add-food-dialog'
 
 type SupabaseClient = ReturnType<typeof useSupabase>['supabase']
 
 interface DayPlanItem {
   id: string
-  food: {
+  entry_type: 'food' | 'quick'
+  food?: {
     name: string
     unit: string
-  }
+  } | null
   qty_units: number
   time: string
   done: boolean
@@ -37,7 +41,6 @@ interface TodayData {
   planId?: string
 }
 
-// Fallback por si no hay goals en BD
 const DEFAULT_GOALS: MacroGoals = { kcal: 2000, protein: 150, carbs: 200, fat: 65 }
 
 export default function TodayPage() {
@@ -47,7 +50,9 @@ export default function TodayPage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [data, setData] = useState<TodayData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [addMealOpen, setAddMealOpen] = useState(false)
+  const [openQuick, setOpenQuick] = useState(false)
+  const [openFood, setOpenFood] = useState(false)
+
 
   useEffect(() => {
     if (!user) {
@@ -66,15 +71,16 @@ export default function TodayPage() {
       setLoading(true)
       const today = getCurrentDate()
 
-      // Goals
-      const goalsResp = await supabaseClient
+      const goalsResp = await supabase
         .from('goals')
-        .select()
+        .select('*')
         .eq('user_id', uid)
-        .single()
-      const goalsData = (goalsResp.data as Partial<MacroGoals> | null) ?? null
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const goalsData = goalsResp.data as Partial<MacroGoals> | null
 
-      // Plan del día
+
       const planResp = await supabase
         .from('day_plans')
         .select('id, training_day')
@@ -82,6 +88,16 @@ export default function TodayPage() {
         .eq('date', today)
         .maybeSingle()
       const planData = (planResp.data as { id: string; training_day?: boolean } | null) ?? null
+
+      const itemsResp = await supabase
+        .from('day_plan_items')
+        .select(`
+          id, entry_type, qty_units, time, done, macros_override,
+          food:foods!day_plan_items_food_id_fkey(name, unit, kcal, protein_g, carbs_g, fat_g)
+        `)
+        .eq('day_plan_id', planData!.id)
+        .order('time')
+
 
       let meals: DayPlanItem[] = []
       const consumed: MacroGoals = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
@@ -91,26 +107,36 @@ export default function TodayPage() {
           .from('day_plan_items')
           .select(`
             id,
+            entry_type,
             qty_units,
             time,
             done,
+            macros_override,
             food:foods(name, unit, kcal, protein_g, carbs_g, fat_g)
           `)
           .eq('day_plan_id', planData.id)
-          .order('time')
+          .order('meal_time')
 
         const mealItems = (itemsResp.data as any[] | null) ?? []
 
         meals = mealItems.map((item) => {
-          const macros = {
-            kcal: Math.round(((item.food?.kcal ?? 0) as number) * (item.qty_units as number)),
-            protein:
-              Math.round((((item.food?.protein_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
-            carbs:
-              Math.round((((item.food?.carbs_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
-            fat:
-              Math.round((((item.food?.fat_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
-          }
+          const isQuick = item.entry_type === 'quick'
+          const macros = isQuick
+            ? {
+                kcal: Math.round(Number(item.macros_override?.kcal ?? 0)),
+                protein: Math.round(Number(item.macros_override?.protein ?? 0) * 10) / 10,
+                carbs: Math.round(Number(item.macros_override?.carbs ?? 0) * 10) / 10,
+                fat: Math.round(Number(item.macros_override?.fat ?? 0) * 10) / 10,
+              }
+            : {
+                kcal: Math.round(((item.food?.kcal ?? 0) as number) * (item.qty_units as number)),
+                protein:
+                  Math.round((((item.food?.protein_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+                carbs:
+                  Math.round((((item.food?.carbs_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+                fat:
+                  Math.round((((item.food?.fat_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+              }
 
           if (item.done) {
             consumed.kcal += macros.kcal
@@ -121,10 +147,13 @@ export default function TodayPage() {
 
           return {
             id: String(item.id),
-            food: {
-              name: String(item.food?.name ?? '—'),
-              unit: String(item.food?.unit ?? ''),
-            },
+            entry_type: isQuick ? 'quick' : 'food',
+            food: isQuick
+              ? null
+              : {
+                  name: String(item.food?.name ?? '—'),
+                  unit: String(item.food?.unit ?? ''),
+                },
             qty_units: Number(item.qty_units ?? 0),
             time: String(item.time ?? '00:00'),
             done: Boolean(item.done),
@@ -159,7 +188,6 @@ export default function TodayPage() {
         .from('day_plan_items')
         .update({ done })
         .eq('id', itemId)
-
       if (userId) await loadTodayData(userId)
     } catch (error) {
       console.error('Error updating meal:', error)
@@ -174,11 +202,10 @@ export default function TodayPage() {
     )
   }
 
-  if (!data) {
+  if (!data || !userId) {
     return (
       <div className="text-center py-8">
         <p className="text-muted-foreground">No hay datos para hoy</p>
-        <Button className="mt-4">Crear plan del día</Button>
       </div>
     )
   }
@@ -190,10 +217,7 @@ export default function TodayPage() {
           <h1 className="text-3xl font-bold">Hoy</h1>
           <p className="text-muted-foreground">
             {new Date().toLocaleDateString('es-ES', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
+              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
             })}
           </p>
         </div>
@@ -206,20 +230,14 @@ export default function TodayPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Macro Card */}
         <div className="lg:col-span-1">
           <MacroCard goals={data.goals} consumed={data.consumed} title="Progreso del día" />
         </div>
 
-        {/* Meals */}
         <div className="lg:col-span-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Comidas del día</CardTitle>
-              <Button size="sm" onClick={() => setAddMealOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Añadir Comida
-              </Button>
             </CardHeader>
             <CardContent>
               {data.meals.length === 0 ? (
@@ -255,9 +273,13 @@ export default function TodayPage() {
                         </div>
 
                         <div>
-                          <div className="font-medium">{meal.food.name}</div>
+                          <div className="font-medium">
+                            {meal.entry_type === 'quick' ? 'Entrada rápida' : (meal.food?.name ?? '—')}
+                          </div>
                           <div className="text-sm text-muted-foreground">
-                            {meal.qty_units} {meal.food.unit} • {meal.macros.kcal} kcal
+                            {meal.entry_type === 'quick'
+                              ? `${meal.macros.kcal} kcal`
+                              : `${meal.qty_units} ${meal.food?.unit ?? ''} • ${meal.macros.kcal} kcal`}
                           </div>
                         </div>
                       </div>
@@ -276,16 +298,24 @@ export default function TodayPage() {
         </div>
       </div>
 
-      {/* Renderiza el diálogo solo si hay userId */}
-      {userId && (
-        <AddMealDialog
-          open={addMealOpen}
-          onOpenChange={setAddMealOpen}
-          date={getCurrentDate()}
-          userId={userId}
-          onCreated={() => loadTodayData(userId)}
-        />
-      )}
+      <TodayFab
+        onAddFood={() => setOpenFood(true)}
+        onQuickAdd={() => setOpenQuick(true)}
+      />
+
+      <QuickAddDialog
+        open={openQuick}
+        onOpenChange={setOpenQuick}
+        userId={userId}
+        onCreated={() => loadTodayData(userId)}
+      />
+
+      <AddFoodDialog
+        open={openFood}
+        onOpenChange={setOpenFood}
+        userId={userId}
+        onCreated={() => loadTodayData(userId)}
+      />
     </div>
   )
 }

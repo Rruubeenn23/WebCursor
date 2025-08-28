@@ -5,9 +5,8 @@ import { useSupabase } from '@/components/providers/supabase-provider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dumbbell, Plus, Edit, Trash2, Search, Timer, Target } from 'lucide-react'
+import { Dumbbell, Plus, Edit, Trash2, Timer, Target } from 'lucide-react'
 import type { Database } from '@/types/database'
-import { PostgrestError } from '@supabase/supabase-js'
 
 type Exercise = Database['public']['Tables']['exercises']['Row']
 type WorkoutExercise = Database['public']['Tables']['workout_exercises']['Row'] & {
@@ -22,10 +21,10 @@ export default function EntrenosPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
   const [showCreateWorkout, setShowCreateWorkout] = useState(false)
   const [showCreateExercise, setShowCreateExercise] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+
   const [workoutData, setWorkoutData] = useState({
     name: '',
     description: '',
@@ -39,6 +38,7 @@ export default function EntrenosPage() {
       rest_seconds: number
     }[]
   })
+
   const [exerciseData, setExerciseData] = useState({
     name: '',
     muscle: '',
@@ -47,56 +47,59 @@ export default function EntrenosPage() {
   })
 
   useEffect(() => {
-    if (user) {
-      loadData()
-    }
+    if (!user) return
+    loadData(user.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
-  const loadData = async () => {
+  const loadData = async (userId: string) => {
     try {
       setLoading(true)
-      if (!user) return
-      
-      // Cargar rutinas con ejercicios
-      const { data: workoutsData } = await supabase
+
+      // Workouts + nested exercises (sin columna "order")
+      const { data: workoutsData, error: workoutsErr } = await supabase
         .from('workouts')
         .select(`
-          *,
+          id, user_id, name, description, is_gym, is_boxing, created_at,
           exercises:workout_exercises(
-            id,
-            exercise_id,
-            sets,
-            reps,
-            rir,
-            rest_seconds,
-            order,
+            id, exercise_id, sets, reps, rir, rest_seconds,
             exercise:exercises(*)
           )
         `)
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
+        .order('id', { foreignTable: 'workout_exercises', ascending: true })
 
-      // Cargar ejercicios disponibles
-      const { data: exercisesData } = await supabase
+      if (workoutsErr) {
+        console.error('workouts error', workoutsErr)
+        setWorkouts([])
+      } else {
+        setWorkouts((workoutsData as unknown as Workout[]) ?? [])
+      }
+
+      // Exercises catálogo
+      const { data: exercisesData, error: exErr } = await supabase
         .from('exercises')
         .select('*')
-        .order('name')
+        .order('name', { ascending: true })
 
-      setWorkouts(workoutsData || [])
-      setExercises(exercisesData || [])
-    } catch (error) {
-      console.error('Error loading data:', error)
+      if (exErr) {
+        console.error('exercises error', exErr)
+        setExercises([])
+      } else {
+        setExercises((exercisesData as Exercise[]) ?? [])
+      }
     } finally {
       setLoading(false)
     }
   }
 
   const createWorkout = async () => {
+    if (!user) return
     try {
-      if (!user) return
+      const supabaseClient = supabase as any
 
       // Crear rutina
-      const supabaseClient = supabase as any // Temporal fix for type issues
       const { data: workout, error: workoutError } = await supabaseClient
         .from('workouts')
         .insert({
@@ -111,42 +114,43 @@ export default function EntrenosPage() {
 
       if (workoutError) throw workoutError
 
-      // Crear ejercicios de la rutina
+      // Crear ejercicios (sin "order"; si tienes "sort_index", añádelo aquí)
       if (workoutData.exercises.length > 0 && workout) {
-        const exercisesToInsert = workoutData.exercises.map((exercise, index) => ({
+        const rows = workoutData.exercises.map((ex) => ({
           workout_id: workout.id,
-          exercise_id: exercise.exercise_id,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          rir: exercise.rir || null,
-          rest_seconds: exercise.rest_seconds || null,
-          order: index + 1
+          exercise_id: ex.exercise_id,
+          sets: ex.sets,
+          reps: ex.reps,
+          rir: ex.rir || null,
+          rest_seconds: ex.rest_seconds || null
+          // sort_index: index + 1, // <- si creas esta columna en BD, descomenta
         }))
-        
         const { error: exercisesError } = await supabaseClient
           .from('workout_exercises')
-          .insert(exercisesToInsert)
-
-        if (exercisesError) throw exercisesError
+          .insert(rows as any)
 
         if (exercisesError) throw exercisesError
       }
 
-      setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
+      setWorkoutData({
+        name: '',
+        description: '',
+        is_gym: false,
+        is_boxing: false,
+        exercises: []
+      })
       setShowCreateWorkout(false)
-      loadData()
+      await loadData(user.id)
     } catch (error) {
       console.error('Error creating workout:', error)
     }
   }
 
   const updateWorkout = async () => {
-    if (!editingWorkout) return
-
+    if (!editingWorkout || !user) return
     try {
       // Actualizar rutina
-      const { error: workoutError } = await (supabase
-        .from('workouts') as any)
+      const { error: workoutError } = await (supabase.from('workouts') as any)
         .update({
           name: workoutData.name,
           description: workoutData.description || null,
@@ -158,33 +162,37 @@ export default function EntrenosPage() {
       if (workoutError) throw workoutError
 
       // Eliminar ejercicios existentes
-      await supabase
+      const { error: delErr } = await supabase
         .from('workout_exercises')
         .delete()
         .eq('workout_id', editingWorkout.id)
+      if (delErr) throw delErr
 
-      // Crear nuevos ejercicios
+      // Insertar nuevos ejercicios (sin "order")
       if (workoutData.exercises.length > 0) {
-        const exercisesToInsert = workoutData.exercises.map((exercise, index) => ({
+        const rows = workoutData.exercises.map((ex) => ({
           workout_id: editingWorkout.id,
-          exercise_id: exercise.exercise_id,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          rir: exercise.rir || null,
-          rest_seconds: exercise.rest_seconds || null,
-          order: index + 1
+          exercise_id: ex.exercise_id,
+          sets: ex.sets,
+          reps: ex.reps,
+          rir: ex.rir || null,
+          rest_seconds: ex.rest_seconds || null
+          // sort_index: index + 1, // <- si creas esta columna en BD, descomenta
         }))
-
-        const { error: exercisesError } = await (supabase
-          .from('workout_exercises') as any)
-          .insert(exercisesToInsert)
-
-        if (exercisesError) throw exercisesError
+        const { error: insErr } = await (supabase.from('workout_exercises') as any)
+          .insert(rows as any)
+        if (insErr) throw insErr
       }
 
-      setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
+      setWorkoutData({
+        name: '',
+        description: '',
+        is_gym: false,
+        is_boxing: false,
+        exercises: []
+      })
       setEditingWorkout(null)
-      loadData()
+      await loadData(user.id)
     } catch (error) {
       console.error('Error updating workout:', error)
     }
@@ -196,10 +204,8 @@ export default function EntrenosPage() {
         .from('workouts')
         .delete()
         .eq('id', workoutId)
-
       if (error) throw error
-      
-      loadData()
+      if (user) await loadData(user.id)
     } catch (error) {
       console.error('Error deleting workout:', error)
     }
@@ -207,8 +213,6 @@ export default function EntrenosPage() {
 
   const createExercise = async () => {
     try {
-      if (!user) return
-      
       const { error } = await supabase
         .from('exercises')
         .insert([{
@@ -217,12 +221,11 @@ export default function EntrenosPage() {
           default_sets: exerciseData.default_sets,
           default_reps: exerciseData.default_reps
         }] as any)
-
       if (error) throw error
 
       setExerciseData({ name: '', muscle: '', default_sets: 3, default_reps: 10 })
       setShowCreateExercise(false)
-      loadData()
+      if (user) await loadData(user.id)
     } catch (error) {
       console.error('Error creating exercise:', error)
     }
@@ -252,11 +255,8 @@ export default function EntrenosPage() {
           <CardContent>
             <div className="space-y-4">
               <div>
-                <label htmlFor="name" className="text-sm font-medium">
-                  Nombre
-                </label>
+                <label className="text-sm font-medium">Nombre</label>
                 <Input
-                  id="name"
                   value={workoutData.name}
                   onChange={(e) => setWorkoutData({ ...workoutData, name: e.target.value })}
                   placeholder="Nombre de la rutina"
@@ -264,11 +264,8 @@ export default function EntrenosPage() {
               </div>
 
               <div>
-                <label htmlFor="description" className="text-sm font-medium">
-                  Descripción
-                </label>
+                <label className="text-sm font-medium">Descripción</label>
                 <Input
-                  id="description"
                   value={workoutData.description}
                   onChange={(e) => setWorkoutData({ ...workoutData, description: e.target.value })}
                   placeholder="Descripción de la rutina"
@@ -297,95 +294,81 @@ export default function EntrenosPage() {
               <div>
                 <h3 className="text-sm font-medium mb-2">Ejercicios</h3>
                 <div className="space-y-4">
-                  {workoutData.exercises.map((exercise, index) => {
-                    const exerciseDetails = exercises.find(e => e.id === exercise.exercise_id)
+                  {workoutData.exercises.map((ex, index) => {
+                    const exDetails = exercises.find(e => e.id === ex.exercise_id)
                     return (
                       <div key={index} className="flex gap-4 items-start">
                         <div className="flex-1">
                           <select
-                            value={exercise.exercise_id}
+                            value={ex.exercise_id}
                             onChange={(e) => {
-                              const newExercises = [...workoutData.exercises]
-                              newExercises[index] = {
-                                ...newExercises[index],
-                                exercise_id: e.target.value,
-                                sets: exercises.find(ex => ex.id === e.target.value)?.default_sets || 3,
-                                reps: exercises.find(ex => ex.id === e.target.value)?.default_reps || 10
+                              const id = e.target.value
+                              const found = exercises.find(x => x.id === id)
+                              const next = [...workoutData.exercises]
+                              next[index] = {
+                                ...next[index],
+                                exercise_id: id,
+                                sets: found?.default_sets ?? 3,
+                                reps: found?.default_reps ?? 10
                               }
-                              setWorkoutData({ ...workoutData, exercises: newExercises })
+                              setWorkoutData({ ...workoutData, exercises: next })
                             }}
-                            className="w-full rounded-lg border border-gray-300 p-2"
+                            className="w-full rounded-lg border p-2"
                           >
                             <option value="">Selecciona un ejercicio</option>
                             {exercises.map((e) => (
-                              <option key={e.id} value={e.id}>
-                                {e.name}
-                              </option>
+                              <option key={e.id} value={e.id}>{e.name}</option>
                             ))}
                           </select>
-                          {exerciseDetails && (
-                            <div className="text-sm text-gray-500 mt-1">
-                              {exerciseDetails.muscle}
-                            </div>
+                          {exDetails && (
+                            <div className="text-sm text-gray-500 mt-1">{exDetails.muscle}</div>
                           )}
                         </div>
 
                         <div className="flex gap-2">
                           <Input
                             type="number"
-                            value={exercise.sets}
+                            value={ex.sets}
                             onChange={(e) => {
-                              const newExercises = [...workoutData.exercises]
-                              newExercises[index] = {
-                                ...newExercises[index],
-                                sets: parseInt(e.target.value) || 0
-                              }
-                              setWorkoutData({ ...workoutData, exercises: newExercises })
+                              const next = [...workoutData.exercises]
+                              next[index] = { ...next[index], sets: parseInt(e.target.value) || 0 }
+                              setWorkoutData({ ...workoutData, exercises: next })
                             }}
                             className="w-20"
                             placeholder="Sets"
                           />
                           <Input
                             type="number"
-                            value={exercise.reps}
+                            value={ex.reps}
                             onChange={(e) => {
-                              const newExercises = [...workoutData.exercises]
-                              newExercises[index] = {
-                                ...newExercises[index],
-                                reps: parseInt(e.target.value) || 0
-                              }
-                              setWorkoutData({ ...workoutData, exercises: newExercises })
+                              const next = [...workoutData.exercises]
+                              next[index] = { ...next[index], reps: parseInt(e.target.value) || 0 }
+                              setWorkoutData({ ...workoutData, exercises: next })
                             }}
                             className="w-20"
                             placeholder="Reps"
                           />
                           <Input
                             type="number"
-                            value={exercise.rir}
+                            value={ex.rir}
                             onChange={(e) => {
-                              const newExercises = [...workoutData.exercises]
-                              newExercises[index] = {
-                                ...newExercises[index],
-                                rir: parseInt(e.target.value) || 0
-                              }
-                              setWorkoutData({ ...workoutData, exercises: newExercises })
+                              const next = [...workoutData.exercises]
+                              next[index] = { ...next[index], rir: parseInt(e.target.value) || 0 }
+                              setWorkoutData({ ...workoutData, exercises: next })
                             }}
                             className="w-20"
                             placeholder="RIR"
                           />
                           <Input
                             type="number"
-                            value={exercise.rest_seconds}
+                            value={ex.rest_seconds}
                             onChange={(e) => {
-                              const newExercises = [...workoutData.exercises]
-                              newExercises[index] = {
-                                ...newExercises[index],
-                                rest_seconds: parseInt(e.target.value) || 0
-                              }
-                              setWorkoutData({ ...workoutData, exercises: newExercises })
+                              const next = [...workoutData.exercises]
+                              next[index] = { ...next[index], rest_seconds: parseInt(e.target.value) || 0 }
+                              setWorkoutData({ ...workoutData, exercises: next })
                             }}
-                            className="w-20"
-                            placeholder="Rest (s)"
+                            className="w-24"
+                            placeholder="Descanso (s)"
                           />
                         </div>
 
@@ -393,9 +376,9 @@ export default function EntrenosPage() {
                           variant="destructive"
                           size="icon"
                           onClick={() => {
-                            const newExercises = [...workoutData.exercises]
-                            newExercises.splice(index, 1)
-                            setWorkoutData({ ...workoutData, exercises: newExercises })
+                            const next = [...workoutData.exercises]
+                            next.splice(index, 1)
+                            setWorkoutData({ ...workoutData, exercises: next })
                           }}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -406,19 +389,13 @@ export default function EntrenosPage() {
 
                   <Button
                     onClick={() =>
-                      setWorkoutData({
-                        ...workoutData,
+                      setWorkoutData((prev) => ({
+                        ...prev,
                         exercises: [
-                          ...workoutData.exercises,
-                          {
-                            exercise_id: '',
-                            sets: 3,
-                            reps: 10,
-                            rir: 2,
-                            rest_seconds: 60
-                          }
+                          ...prev.exercises,
+                          { exercise_id: '', sets: 3, reps: 10, rir: 2, rest_seconds: 60 }
                         ]
-                      })
+                      }))
                     }
                     variant="outline"
                   >
@@ -441,7 +418,13 @@ export default function EntrenosPage() {
                   onClick={() => {
                     setShowCreateWorkout(false)
                     setEditingWorkout(null)
-                    setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
+                    setWorkoutData({
+                      name: '',
+                      description: '',
+                      is_gym: false,
+                      is_boxing: false,
+                      exercises: []
+                    })
                   }}
                 >
                   Cancelar
@@ -459,11 +442,8 @@ export default function EntrenosPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <label htmlFor="exercise-name" className="text-sm font-medium">
-                Nombre
-              </label>
+              <label className="text-sm font-medium">Nombre</label>
               <Input
-                id="exercise-name"
                 value={exerciseData.name}
                 onChange={(e) => setExerciseData({ ...exerciseData, name: e.target.value })}
                 placeholder="Nombre del ejercicio"
@@ -471,11 +451,8 @@ export default function EntrenosPage() {
             </div>
 
             <div>
-              <label htmlFor="muscle" className="text-sm font-medium">
-                Músculo
-              </label>
+              <label className="text-sm font-medium">Músculo</label>
               <Input
-                id="muscle"
                 value={exerciseData.muscle}
                 onChange={(e) => setExerciseData({ ...exerciseData, muscle: e.target.value })}
                 placeholder="Músculo principal"
@@ -484,11 +461,8 @@ export default function EntrenosPage() {
 
             <div className="flex gap-4">
               <div>
-                <label htmlFor="default-sets" className="text-sm font-medium">
-                  Series por defecto
-                </label>
+                <label className="text-sm font-medium">Series por defecto</label>
                 <Input
-                  id="default-sets"
                   type="number"
                   value={exerciseData.default_sets}
                   onChange={(e) =>
@@ -496,13 +470,9 @@ export default function EntrenosPage() {
                   }
                 />
               </div>
-
               <div>
-                <label htmlFor="default-reps" className="text-sm font-medium">
-                  Repeticiones por defecto
-                </label>
+                <label className="text-sm font-medium">Repeticiones por defecto</label>
                 <Input
-                  id="default-reps"
                   type="number"
                   value={exerciseData.default_reps}
                   onChange={(e) =>
@@ -553,12 +523,12 @@ export default function EntrenosPage() {
                           description: workout.description || '',
                           is_gym: workout.is_gym,
                           is_boxing: workout.is_boxing,
-                          exercises: workout.exercises.map(exercise => ({
-                            exercise_id: exercise.exercise_id,
-                            sets: exercise.sets,
-                            reps: exercise.reps,
-                            rir: exercise.rir || 2,
-                            rest_seconds: exercise.rest_seconds || 60
+                          exercises: workout.exercises.map(ex => ({
+                            exercise_id: ex.exercise_id,
+                            sets: ex.sets,
+                            reps: ex.reps,
+                            rir: ex.rir || 2,
+                            rest_seconds: ex.rest_seconds || 60
                           }))
                         })
                         setEditingWorkout(workout)
@@ -567,11 +537,7 @@ export default function EntrenosPage() {
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteWorkout(workout.id)}
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => deleteWorkout(workout.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -586,38 +552,33 @@ export default function EntrenosPage() {
                       Gimnasio
                     </div>
                   )}
-                  {workout.is_boxing && (
-                    <div className="text-sm text-gray-500">🥊 Boxeo</div>
-                  )}
+                  {workout.is_boxing && <div className="text-sm text-gray-500">🥊 Boxeo</div>}
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {workout.exercises.map((exercise) => (
-                    <div key={exercise.id} className="flex items-center gap-4">
+                  {workout.exercises.map((ex) => (
+                    <div key={ex.id} className="flex items-center gap-4">
                       <div className="flex-1">
-                        <div className="font-medium">{exercise.exercise.name}</div>
-                        <div className="text-sm text-gray-500">
-                          {exercise.exercise.muscle}
-                        </div>
+                        <div className="font-medium">{ex.exercise.name}</div>
+                        <div className="text-sm text-gray-500">{ex.exercise.muscle}</div>
                       </div>
                       <div className="flex gap-4">
                         <div className="text-sm text-gray-500">
                           <Dumbbell className="h-4 w-4 inline-block mr-1" />
-                          {exercise.sets} × {exercise.reps}
+                          {ex.sets} × {ex.reps}
                         </div>
-                        {exercise.rir && (
+                        {ex.rir != null && (
                           <div className="text-sm text-gray-500">
                             <Target className="h-4 w-4 inline-block mr-1" />
-                            RIR {exercise.rir}
+                            RIR {ex.rir}
                           </div>
                         )}
-                        {exercise.rest_seconds && (
+                        {ex.rest_seconds != null && (
                           <div className="text-sm text-gray-500">
                             <Timer className="h-4 w-4 inline-block mr-1" />
-                            {Math.floor(exercise.rest_seconds / 60)}:{String(
-                              exercise.rest_seconds % 60
-                            ).padStart(2, '0')}
+                            {Math.floor(ex.rest_seconds / 60)}:
+                            {String(ex.rest_seconds % 60).padStart(2, '0')}
                           </div>
                         )}
                       </div>
