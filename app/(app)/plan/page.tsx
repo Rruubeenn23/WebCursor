@@ -23,6 +23,7 @@ interface WeekPlan {
 
 export default function PlanPage() {
   const { user, supabase } = useSupabase()
+  const supabaseClient = supabase as any // Temporal fix for type issues
   const [weekPlan, setWeekPlan] = useState<WeekPlan>({})
   const [loading, setLoading] = useState(true)
   const [creatingPlan, setCreatingPlan] = useState<string | null>(null)
@@ -55,15 +56,17 @@ export default function PlanPage() {
       }
 
       // Cargar planes existentes
-      const { data: existingPlans } = await supabase
+      const supabaseClient = supabase as any // Temporal fix for type issues
+      const { data: existingPlans } = await supabaseClient
         .from('day_plans')
         .select('*')
         .eq('user_id', user.id)
         .in('date', weekDates)
 
       const weekPlanData: WeekPlan = {}
+      const plans = existingPlans as DayPlan[] || []
       weekDates.forEach(date => {
-        const existingPlan = existingPlans?.find(plan => plan.date === date)
+        const existingPlan = plans.find(plan => plan.date === date)
         weekPlanData[date] = existingPlan || null
       })
 
@@ -79,7 +82,7 @@ export default function PlanPage() {
     try {
       if (!user) return
       setCreatingPlan(date)
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('day_plans')
         .insert({
           user_id: user.id,
@@ -111,7 +114,7 @@ export default function PlanPage() {
       const plan = weekPlan[date]
       if (!plan) return
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('day_plans')
         .update(updates)
         .eq('id', plan.id)
@@ -134,7 +137,7 @@ export default function PlanPage() {
       const plan = weekPlan[date]
       if (!plan) return
 
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('day_plans')
         .delete()
         .eq('id', plan.id)
