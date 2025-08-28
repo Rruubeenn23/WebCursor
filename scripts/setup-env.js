@@ -11,7 +11,7 @@ const envContent = `# Supabase Configuration
 # Obtén estas claves desde: https://supabase.com/dashboard/project/[tu-proyecto]/settings/api
 NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder_anon_key
-SUPABASE_SERVICE_ROLE_KEY=placeholder_service_role_key
+NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=placeholder_service_role_key
 
 # Next.js Configuration
 NEXTAUTH_SECRET=placeholder_nextauth_secret
