@@ -1,11 +1,21 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabase } from '@/components/providers/supabase-provider'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useSupabase } from '@/components/providers/supabase-prov      const { data: workout, error: workoutError } = await supabase
+        .from('workouts')
+        .insert([{
+          user_id: user.id,
+          name: workoutData.name,
+          description: workoutData.description || null,
+          is_gym: workoutData.is_gym,
+          is_boxing: workoutData.is_boxing
+        }])
+        .select()
+        .single()rt { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dumbbell, Plus, Edit, Trash2, Search, Timer, Target } from 'lucide-react'
+import type { Database } from '@/types/database'
 
 interface Exercise {
   id: string
@@ -13,36 +23,46 @@ interface Exercise {
   muscle: string
   default_sets: number
   default_reps: number
-}
-
-interface Workout {
-  id: string
-  name: string
-  description?: string
   created_at: string
-  exercises: WorkoutExercise[]
+  updated_at: string
 }
 
 interface WorkoutExercise {
   id: string
+  workout_id: string
   exercise_id: string
   sets: number
   reps: number
-  rir?: number
-  rest_seconds?: number
+  rir: number | null
+  rest_seconds: number | null
   order: number
+  created_at: string
+  updated_at: string
   exercise: Exercise
 }
 
+interface Workout {
+  id: string
+  user_id: string
+  name: string
+  description: string | null
+  is_gym: boolean
+  is_boxing: boolean
+  created_at: string
+  updated_at: string
+}
+
+type WorkoutWithExercises = Workout & { exercises: WorkoutExercise[] }
+
 export default function EntrenosPage() {
-  const { user, supabase } = useSupabase()
-  const [workouts, setWorkouts] = useState<Workout[]>([])
+  const supabase = useContext(Context)
+  const [workouts, setWorkouts] = useState<WorkoutWithExercises[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateWorkout, setShowCreateWorkout] = useState(false)
   const [showCreateExercise, setShowCreateExercise] = useState(false)
-  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+  const [editingWorkout, setEditingWorkout] = useState<WorkoutWithExercises | null>(null)
   const [workoutData, setWorkoutData] = useState({
     name: '',
     description: '',
@@ -113,22 +133,22 @@ export default function EntrenosPage() {
     try {
       if (!user) return
       // Crear rutina
-      const { data: workout, error: workoutError } = await supabase
+      const { data: workout, error: workoutError } = await (supabase
         .from('workouts')
-        .insert({
+        .insert([{
           user_id: user.id,
           name: workoutData.name,
           description: workoutData.description || null,
           is_gym: workoutData.is_gym,
           is_boxing: workoutData.is_boxing
-        })
+        }] as any)
         .select()
-        .single()
+        .single())
 
       if (workoutError) throw workoutError
 
       // Crear ejercicios de la rutina
-      if (workoutData.exercises.length > 0) {
+      if (workoutData.exercises.length > 0 && workout) {
         const exercisesToInsert = workoutData.exercises.map((exercise, index) => ({
           workout_id: workout.id,
           exercise_id: exercise.exercise_id,
@@ -139,14 +159,14 @@ export default function EntrenosPage() {
           order: index + 1
         }))
 
-        const { error: exercisesError } = await supabase
+        const { error: exercisesError } = await (supabase
           .from('workout_exercises')
-          .insert(exercisesToInsert)
+          .insert(exercisesToInsert as any))
 
         if (exercisesError) throw exercisesError
       }
 
-      setWorkoutData({ name: '', description: '', exercises: [] })
+      setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
       setShowCreateWorkout(false)
       loadData()
     } catch (error) {
@@ -161,12 +181,12 @@ export default function EntrenosPage() {
       // Actualizar rutina
       const { error: workoutError } = await supabase
         .from('workouts')
-        .update({
+        .update([{
           name: workoutData.name,
           description: workoutData.description || null,
           is_gym: workoutData.is_gym,
           is_boxing: workoutData.is_boxing
-        })
+        }] as any)
         .eq('id', editingWorkout.id)
 
       if (workoutError) throw workoutError
@@ -191,12 +211,12 @@ export default function EntrenosPage() {
 
         const { error: exercisesError } = await supabase
           .from('workout_exercises')
-          .insert(exercisesToInsert)
+          .insert(exercisesToInsert as any)
 
         if (exercisesError) throw exercisesError
       }
 
-      setWorkoutData({ name: '', description: '', exercises: [] })
+      setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
       setEditingWorkout(null)
       loadData()
     } catch (error) {
@@ -224,12 +244,12 @@ export default function EntrenosPage() {
       
       const { error } = await supabase
         .from('exercises')
-        .insert({
+        .insert([{
           name: exerciseData.name,
           muscle: exerciseData.muscle,
           default_sets: exerciseData.default_sets,
           default_reps: exerciseData.default_reps
-        })
+        }] as any)
 
       if (error) throw error
 
@@ -608,7 +628,7 @@ export default function EntrenosPage() {
                   onClick={() => {
                     setShowCreateWorkout(false)
                     setEditingWorkout(null)
-                    setWorkoutData({ name: '', description: '', exercises: [] })
+                    setWorkoutData({ name: '', description: '', is_gym: false, is_boxing: false, exercises: [] })
                   }}
                 >
                   Cancelar
