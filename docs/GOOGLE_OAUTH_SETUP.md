@@ -67,7 +67,7 @@ Authorized redirect URIs:
 ### Paso 3: Verificar Configuración
 
 #### 3.1 Probar OAuth
-- Ve a tu aplicación: `http://localhost:3000`
+- Ve a tu aplicación: `https://web-cursor-five.vercel.app/`
 - Haz clic en el botón **Google**
 - Deberías ser redirigido a Google para autorizar
 

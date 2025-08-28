@@ -17,7 +17,10 @@ export function SupabaseProvider({
 }: {
   children: React.ReactNode
 }) {
-  const [supabase] = useState(() => createClientComponentClient<Database>())
+  const [supabase] = useState(() => createClientComponentClient<Database>({
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  }))
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
