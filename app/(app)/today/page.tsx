@@ -110,9 +110,9 @@ export default function TodayPage() {
       const today = getCurrentDate()
 
       // Goals (sin genéricos; casteo el resultado)
-      const goalsResp = await supabase
+      const goalsResp = await supabaseClient
         .from('goals')
-        .select('*')
+        .select()
         .eq('user_id', uid)
         .single()
       const goalsData = (goalsResp.data as Partial<MacroGoals> | null) ?? null

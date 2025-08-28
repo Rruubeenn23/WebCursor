@@ -10,10 +10,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+import type { Database } from '@/types/database'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 interface Food {
   id: string
   name: string
   unit: string
+  kcal: number
+  protein_g: number
+  carbs_g: number
+  fat_g: number
+  grams_per_unit: number
 }
 
 interface Props {
@@ -30,15 +37,20 @@ export function AddMealDialog({ open, onOpenChange, onAddMeal, planId }: Props) 
   const [time, setTime] = useState(new Date().toTimeString().slice(0, 5))
   const [loading, setLoading] = useState(false)
 
+  const supabase = createClientComponentClient<Database>()
+
   useEffect(() => {
     loadFoods()
   }, [])
 
   const loadFoods = async () => {
     try {
-      const response = await fetch('/api/foods')
-      const data = await response.json()
-      setFoods(data)
+      const { data: foodsData } = await supabase
+        .from('foods')
+        .select('*')
+        .order('name')
+
+      setFoods(foodsData || [])
     } catch (error) {
       console.error('Error loading foods:', error)
     }
