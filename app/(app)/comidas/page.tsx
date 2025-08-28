@@ -1,41 +1,25 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSupabase } from '@/components/providers/supabase-provider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Utensils, Plus, Edit, Trash2, Search, Clock } from 'lucide-react'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/supabase'
 
-interface Food {
-  id: string
-  name: string
-  kcal: number
-  protein_g: number
-  carbs_g: number
-  fat_g: number
-  unit: string
-  grams_per_unit: number
+type Food = Database['public']['Tables']['foods']['Row']
+type MealTemplate = Database['public']['Tables']['meal_templates']['Row'] & {
+  items: Array<MealTemplateItem>
 }
-
-interface MealTemplate {
-  id: string
-  name: string
-  description?: string
-  created_at: string
-  items: MealTemplateItem[]
-}
-
-interface MealTemplateItem {
-  id: string
-  food_id: string
-  qty_units: number
-  time_hint?: string
+type MealTemplateItem = Database['public']['Tables']['meal_template_items']['Row'] & {
   food: Food
 }
 
+const supabaseClient = createClientComponentClient<Database>()
+
 export default function ComidasPage() {
-  const { user, supabase } = useSupabase()
+  const [user, setUser] = useState<any>(null)
   const [templates, setTemplates] = useState<MealTemplate[]>([])
   const [foods, setFoods] = useState<Food[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,6 +36,14 @@ export default function ComidasPage() {
       time_hint: string
     }>
   })
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user: currentUser } } = await supabaseClient.auth.getUser()
+      setUser(currentUser)
+    }
+    fetchUser()
+  }, [])
 
   const [foodData, setFoodData] = useState({
     name: '',
@@ -75,7 +67,7 @@ export default function ComidasPage() {
       if (!user) return
       
       // Cargar templates del usuario
-      const { data: templatesData } = await supabase
+      const { data: templatesData } = await supabaseClient
         .from('meal_templates')
         .select(`
           *,
@@ -91,7 +83,7 @@ export default function ComidasPage() {
         .order('created_at', { ascending: false })
 
       // Cargar alimentos disponibles
-      const { data: foodsData } = await supabase
+      const { data: foodsData } = await supabaseClient
         .from('foods')
         .select('*')
         .order('name')
@@ -108,29 +100,33 @@ export default function ComidasPage() {
   const createTemplate = async () => {
     try {
       if (!user) return
+      
+      const newTemplate: Database['public']['Tables']['meal_templates']['Insert'] = {
+        user_id: user.id,
+        name: templateData.name,
+        description: templateData.description || null
+      }
+
       // Crear template
-      const { data: template, error: templateError } = await supabase
+      const { data: template, error: templateError } = await supabaseClient
         .from('meal_templates')
-        .insert({
-          user_id: user.id,
-          name: templateData.name,
-          description: templateData.description || null
-        })
+        .insert([newTemplate])
         .select()
         .single()
 
       if (templateError) throw templateError
 
       // Crear items del template
-      if (templateData.items.length > 0) {
-        const itemsToInsert = templateData.items.map(item => ({
-          template_id: template.id,
-          food_id: item.food_id,
-          qty_units: item.qty_units,
-          time_hint: item.time_hint || null
-        }))
+      if (template && templateData.items.length > 0) {
+        const itemsToInsert: Database['public']['Tables']['meal_template_items']['Insert'][] = 
+          templateData.items.map(item => ({
+            template_id: template.id,
+            food_id: item.food_id,
+            qty_units: item.qty_units,
+            time_hint: item.time_hint || null
+          }))
 
-        const { error: itemsError } = await supabase
+        const { error: itemsError } = await supabaseClient
           .from('meal_template_items')
           .insert(itemsToInsert)
 
@@ -149,33 +145,36 @@ export default function ComidasPage() {
     if (!editingTemplate) return
 
     try {
+      const updateData: Database['public']['Tables']['meal_templates']['Update'] = {
+        name: templateData.name,
+        description: templateData.description || null
+      }
+
       // Actualizar template
-      const { error: templateError } = await supabase
+      const { error: templateError } = await supabaseClient
         .from('meal_templates')
-        .update({
-          name: templateData.name,
-          description: templateData.description || null
-        })
+        .update(updateData)
         .eq('id', editingTemplate.id)
 
       if (templateError) throw templateError
 
       // Eliminar items existentes
-      await supabase
+      await supabaseClient
         .from('meal_template_items')
         .delete()
         .eq('template_id', editingTemplate.id)
 
       // Crear nuevos items
       if (templateData.items.length > 0) {
-        const itemsToInsert = templateData.items.map(item => ({
-          template_id: editingTemplate.id,
-          food_id: item.food_id,
-          qty_units: item.qty_units,
-          time_hint: item.time_hint || null
-        }))
+        const itemsToInsert: Database['public']['Tables']['meal_template_items']['Insert'][] = 
+          templateData.items.map(item => ({
+            template_id: editingTemplate.id,
+            food_id: item.food_id,
+            qty_units: item.qty_units,
+            time_hint: item.time_hint || null
+          }))
 
-        const { error: itemsError } = await supabase
+        const { error: itemsError } = await supabaseClient
           .from('meal_template_items')
           .insert(itemsToInsert)
 
@@ -192,7 +191,7 @@ export default function ComidasPage() {
 
   const deleteTemplate = async (templateId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('meal_templates')
         .delete()
         .eq('id', templateId)
@@ -207,18 +206,20 @@ export default function ComidasPage() {
   const createFood = async () => {
     try {
       if (!user) return
+
+      const newFood: Database['public']['Tables']['foods']['Insert'] = {
+        name: foodData.name,
+        kcal: foodData.kcal,
+        protein_g: foodData.protein_g,
+        carbs_g: foodData.carbs_g,
+        fat_g: foodData.fat_g,
+        unit: foodData.unit,
+        grams_per_unit: foodData.grams_per_unit
+      }
       
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('foods')
-        .insert({
-          name: foodData.name,
-          kcal: foodData.kcal,
-          protein_g: foodData.protein_g,
-          carbs_g: foodData.carbs_g,
-          fat_g: foodData.fat_g,
-          unit: foodData.unit,
-          grams_per_unit: foodData.grams_per_unit
-        })
+        .insert([newFood])
 
       if (error) throw error
 
