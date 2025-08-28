@@ -32,10 +32,10 @@ function fixOAuthURIs() {
   console.log('\n📋 URIs que debes configurar en Google Cloud Console:');
   console.log('\n🔗 Authorized redirect URIs:');
   console.log(`   ${supabaseUrl}/auth/v1/callback`);
-  console.log('   http://localhost:3000/auth/callback');
+  console.log('   https://web-cursor-five.vercel.app/auth/callback');
   
   console.log('\n🌐 Authorized JavaScript origins:');
-  console.log('   http://localhost:3000');
+  console.log('   https://web-cursor-five.vercel.app/');
   console.log(`   ${supabaseUrl}`);
 
   console.log('\n📝 Pasos para configurar:');

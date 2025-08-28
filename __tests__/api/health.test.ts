@@ -3,7 +3,7 @@ import { GET } from '@/app/api/health/route'
 
 describe('/api/health', () => {
   it('should return health status', async () => {
-    const request = new NextRequest('http://localhost:3000/api/health')
+    const request = new NextRequest('https://web-cursor-five.vercel.app/api/health')
     const response = await GET(request)
     const data = await response.json()
 

@@ -41,7 +41,7 @@ function verifyOAuthConfig() {
   console.log('2. Crea credenciales OAuth 2.0');
   console.log('3. Configura redirect URIs:');
   console.log('   - https://tu-proyecto.supabase.co/auth/v1/callback');
-  console.log('   - http://localhost:3000/auth/callback');
+  console.log('   - https://web-cursor-five.vercel.app/auth/callback');
   console.log('4. Ve a Supabase → Authentication → Providers');
   console.log('5. Habilita Google y pega las credenciales');
   console.log('6. Guarda la configuración');

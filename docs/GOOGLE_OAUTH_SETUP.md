@@ -31,12 +31,12 @@ El error `"Unsupported provider: provider is not enabled"` indica que Google OAu
 ```
 Name: Fitness Hub
 Authorized JavaScript origins:
-- http://localhost:3000
-- https://tu-proyecto.supabase.co
+- https://web-cursor-five.vercel.app/
+- https://web-cursor-five.vercel.app/
 
 Authorized redirect URIs:
-- https://tu-proyecto.supabase.co/auth/v1/callback
-- http://localhost:3000/auth/callback
+- https://web-cursor-five.vercel.app/
+- https://web-cursor-five.vercel.app/
 ```
 
 **⚠️ Importante:** Reemplaza `tu-proyecto` con tu Project ID real de Supabase.

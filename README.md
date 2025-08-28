@@ -94,13 +94,13 @@ SUPABASE_SERVICE_ROLE_KEY=tu_clave_service_role
 
 # Next.js
 NEXTAUTH_SECRET=tu_secret_aleatorio
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=https://web-cursor-five.vercel.app/
 ```
 
 **Variables opcionales** (para automatizaciones):
 ```env
 # n8n
-BASE_URL=http://localhost:3000
+BASE_URL=https://web-cursor-five.vercel.app/
 API_TOKEN=token_para_n8n
 DEFAULT_TEMPLATE_ID=id_de_plantilla_por_defecto
 

@@ -15,10 +15,10 @@ SUPABASE_SERVICE_ROLE_KEY=placeholder_service_role_key
 
 # Next.js Configuration
 NEXTAUTH_SECRET=placeholder_nextauth_secret
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=https://web-cursor-five.vercel.app/
 
 # n8n Configuration (for automation workflows)
-BASE_URL=http://localhost:3000
+BASE_URL=https://web-cursor-five.vercel.app/
 API_TOKEN=placeholder_api_token
 DEFAULT_TEMPLATE_ID=placeholder_template_id
 
