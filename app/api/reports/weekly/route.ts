@@ -1,21 +1,26 @@
 import { NextRequest } from 'next/server'
 import PDFDocument from 'pdfkit'
-import { createClient } from '@supabase/supabase-js'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs' // PDFKit necesita Node, no Edge
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const weekStart = searchParams.get('weekStart') // yyyy-mm-dd
-  const userId = searchParams.get('userId')
-  if (!weekStart || !userId) {
-    return new Response('Missing weekStart or userId', { status: 400 })
+  if (!weekStart) {
+    return new Response('Missing weekStart', { status: 400 })
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY! // usa service role SOLO en server route
-  )
+  const supabase = createRouteHandlerClient({ cookies })
+
+  // Authenticated user (required to bind to RLS)
+  const { data: auth } = await supabase.auth.getUser()
+  const userId = auth.user?.id
+  if (!userId) {
+    return new Response('Unauthorized', { status: 401 })
+  }
 
   const { data: weekLoad } = await supabase
     .from('v_weekly_load')
@@ -31,17 +36,23 @@ export async function GET(req: NextRequest) {
     .eq('week_start', weekStart)
 
   const exIds = (perEx ?? []).map(x => x.exercise_id)
-  const { data: exercises } = exIds.length ? await supabase
-    .from('exercises').select('id, name').in('id', exIds) : { data: [] as any }
+  const { data: exercises } = exIds.length
+    ? await supabase.from('exercises').select('id, name').in('id', exIds)
+    : { data: [] as any[] }
 
   const nameMap = new Map((exercises ?? []).map((e: any) => [e.id, e.name]))
 
-  // PDF stream
+  // --- Generar PDF ---
   const doc = new PDFDocument({ margin: 40 })
-  const chunks: Uint8Array[] = []
-  doc.on('data', (c) => chunks.push(c))
+  const chunks: Buffer[] = []
+
+  doc.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)))
   const done = new Promise<Uint8Array>((resolve) => {
-    doc.on('end', () => resolve(Buffer.concat(chunks)))
+    doc.on('end', () => {
+      const buf = Buffer.concat(chunks) // Buffer Node
+      // Convertimos a Uint8Array
+      resolve(new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength))
+    })
   })
 
   doc.fontSize(18).text('Informe semanal', { underline: true })
@@ -58,21 +69,27 @@ export async function GET(req: NextRequest) {
 
   doc.fontSize(14).text('Por ejercicio')
   doc.moveDown(0.5)
-  (perEx ?? []).forEach((row: any) => {
+  for (const row of (perEx ?? [])) {
     doc.fontSize(12).text(
       `${nameMap.get(row.exercise_id) || row.exercise_id} — Sets: ${row.sets}, Tonnage: ${Math.round(row.tonnage_kg)} kg`
     )
-  })
+  }
 
   doc.end()
-  const pdf = await done
+  const pdfBytes = await done
 
-  return new Response(pdf, {
+  // ✅ Entregar como ArrayBuffer (evita el error de tipos)
+  const arrayBuf = pdfBytes.buffer.slice(
+    pdfBytes.byteOffset,
+    pdfBytes.byteOffset + pdfBytes.byteLength
+  )
+
+  return new Response(arrayBuf as ArrayBuffer, {
     status: 200,
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="weekly-${weekStart}.pdf"`,
-      'Cache-Control': 'no-store'
-    }
+      'Cache-Control': 'no-store',
+    },
   })
 }

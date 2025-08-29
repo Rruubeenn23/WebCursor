@@ -21,35 +21,23 @@ export function SupabaseProvider({
   const [user, setUser] = useState<User | null>(null)
 
   useEffect(() => {
-    let authListener: { subscription: { unsubscribe: () => void } } | null = null
+    let unsub: (() => void) | undefined
 
-    async function setupAuthListener() {
+    ;(async () => {
       const { data } = await supabase.auth.getUser()
       setUser(data.user)
 
       const { data: authData } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        (_event, session) => {
           setUser(session?.user ?? null)
         }
       )
-      authListener = authData
-    }
-
-    setupAuthListener()
+      unsub = () => authData.subscription.unsubscribe()
+    })()
 
     return () => {
-      if (authListener) {
-        authListener.subscription.unsubscribe()
-      }
+      if (unsub) unsub()
     }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setUser(session?.user ?? null)
-      }
-    )
-
-    return () => subscription.unsubscribe()
   }, [supabase])
 
   return (

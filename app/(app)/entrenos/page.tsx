@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useSupabase } from '@/components/providers/supabase-provider'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,14 +17,36 @@ type Workout = Database['public']['Tables']['workouts']['Row'] & {
   exercises: WorkoutExercise[]
 }
 
+type SessionRow = {
+  id: string
+  workout_id: string | null
+  started_at: string | null
+  completed_at: string | null
+  workouts?: { name: string } | null
+}
+
+type PRRow = {
+  exercise_id: string
+  best_weight_kg: number | null
+  best_reps: number | null
+  achieved_at: string
+  exercise?: { name: string } | null
+}
+
 export default function EntrenosPage() {
+  const router = useRouter()
   const { user, supabase } = useSupabase()
+
   const [workouts, setWorkouts] = useState<Workout[]>([])
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading] = useState(true)
   const [showCreateWorkout, setShowCreateWorkout] = useState(false)
   const [showCreateExercise, setShowCreateExercise] = useState(false)
   const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null)
+
+  const [recentSessions, setRecentSessions] = useState<SessionRow[]>([])
+  const [prs, setPrs] = useState<PRRow[]>([])
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null)
 
   const [workoutData, setWorkoutData] = useState({
     name: '',
@@ -48,15 +71,15 @@ export default function EntrenosPage() {
 
   useEffect(() => {
     if (!user) return
-    loadData(user.id)
+    loadAll(user.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user])
 
-  const loadData = async (userId: string) => {
+  async function loadAll(userId: string) {
     try {
       setLoading(true)
 
-      // Workouts + nested exercises (sin columna "order")
+      // 1) Rutinas + ejercicios anidados (sin columna "order")
       const { data: workoutsData, error: workoutsErr } = await supabase
         .from('workouts')
         .select(`
@@ -77,7 +100,7 @@ export default function EntrenosPage() {
         setWorkouts((workoutsData as unknown as Workout[]) ?? [])
       }
 
-      // Exercises catálogo
+      // 2) Catálogo de ejercicios
       const { data: exercisesData, error: exErr } = await supabase
         .from('exercises')
         .select('*')
@@ -89,10 +112,97 @@ export default function EntrenosPage() {
       } else {
         setExercises((exercisesData as Exercise[]) ?? [])
       }
+
+      // 3) Sesión abierta (completed_at IS NULL) para mostrar CTA de continuar
+      const { data: openList, error: openErr } = await supabase
+        .from('workout_sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .is('completed_at', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (openErr) {
+        console.error('open session err', openErr)
+      }
+
+      const openId =
+        (openList as Array<{ id: string }> | null)?.[0]?.id ?? null
+
+      setOpenSessionId(openId)
+
+
+      // 4) Últimas sesiones (tanto completadas como abiertas)
+      const { data: sessData, error: sessErr } = await supabase
+        .from('workout_sessions')
+        .select('id, workout_id, started_at, completed_at, workouts:workout_id(name)')
+        .eq('user_id', userId)
+        .order('started_at', { ascending: false })
+        .limit(30)
+
+      if (sessErr) {
+        console.error('sessions list err', sessErr)
+        setRecentSessions([])
+      } else {
+        setRecentSessions((sessData as unknown as SessionRow[]) ?? [])
+      }
+
+      // 5) PRs sin join embebido (tipado explícito para evitar 'never')
+      type PRRow = {
+        exercise_id: string | null
+        best_weight_kg: number | null
+        best_reps: number | null
+        achieved_at: string | null
+      }
+
+      type ExerciseLite = { id: string; name: string }
+
+      try {
+        const { data: prsRaw, error: prsErr } = await supabase
+          .from('exercise_prs')
+          .select('exercise_id, best_weight_kg, best_reps, achieved_at')
+          .eq('user_id', userId)
+          .order('achieved_at', { ascending: false })
+          .limit(20)
+
+        if (prsErr) {
+          console.warn('prs list err', prsErr)
+          setPrs([])
+        } else {
+          const prs = (prsRaw ?? []) as PRRow[]
+
+          // ids únicos (type guard para filtrar nulls)
+          const ids = Array.from(
+            new Set(prs.map(r => r.exercise_id).filter((x): x is string => !!x))
+          )
+
+          const { data: exRows } = ids.length
+            ? await supabase.from('exercises').select('id, name').in('id', ids)
+            : { data: [] as ExerciseLite[] }
+
+          const map = new Map<string, string>(
+            ((exRows ?? []) as ExerciseLite[]).map(e => [e.id, e.name])
+          )
+
+          const hydrated = prs.map(r => ({
+            ...r,
+            exercise: { name: map.get(r.exercise_id ?? '') ?? r.exercise_id ?? '—' }
+          }))
+
+          setPrs(hydrated as any)
+        }
+      } catch (e) {
+        console.warn('prs list catch', e)
+        setPrs([])
+      }
+
+
     } finally {
       setLoading(false)
     }
   }
+
+  // === Rutinas ===
 
   const createWorkout = async () => {
     if (!user) return
@@ -114,8 +224,8 @@ export default function EntrenosPage() {
 
       if (workoutError) throw workoutError
 
-      // Crear ejercicios (sin "order"; si tienes "sort_index", añádelo aquí)
-      if (workoutData.exercises.length > 0 && workout) {
+      // Crear ejercicios (sin "order")
+      if (workoutData.exercises.length > 0) {
         const rows = workoutData.exercises.map((ex) => ({
           workout_id: workout.id,
           exercise_id: ex.exercise_id,
@@ -123,7 +233,6 @@ export default function EntrenosPage() {
           reps: ex.reps,
           rir: ex.rir || null,
           rest_seconds: ex.rest_seconds || null
-          // sort_index: index + 1, // <- si creas esta columna en BD, descomenta
         }))
         const { error: exercisesError } = await supabaseClient
           .from('workout_exercises')
@@ -140,7 +249,7 @@ export default function EntrenosPage() {
         exercises: []
       })
       setShowCreateWorkout(false)
-      await loadData(user.id)
+      await loadAll(user.id)
     } catch (error) {
       console.error('Error creating workout:', error)
     }
@@ -168,7 +277,7 @@ export default function EntrenosPage() {
         .eq('workout_id', editingWorkout.id)
       if (delErr) throw delErr
 
-      // Insertar nuevos ejercicios (sin "order")
+      // Insertar nuevos ejercicios
       if (workoutData.exercises.length > 0) {
         const rows = workoutData.exercises.map((ex) => ({
           workout_id: editingWorkout.id,
@@ -177,7 +286,6 @@ export default function EntrenosPage() {
           reps: ex.reps,
           rir: ex.rir || null,
           rest_seconds: ex.rest_seconds || null
-          // sort_index: index + 1, // <- si creas esta columna en BD, descomenta
         }))
         const { error: insErr } = await (supabase.from('workout_exercises') as any)
           .insert(rows as any)
@@ -192,7 +300,7 @@ export default function EntrenosPage() {
         exercises: []
       })
       setEditingWorkout(null)
-      await loadData(user.id)
+      await loadAll(user.id)
     } catch (error) {
       console.error('Error updating workout:', error)
     }
@@ -205,15 +313,18 @@ export default function EntrenosPage() {
         .delete()
         .eq('id', workoutId)
       if (error) throw error
-      if (user) await loadData(user.id)
+      if (user) await loadAll(user.id)
     } catch (error) {
       console.error('Error deleting workout:', error)
     }
   }
 
+  // === Ejercicios ===
+
   const createExercise = async () => {
     try {
-      const { error } = await supabase
+      // IMPORTANTE: usar select() para obtener el registro creado (el insert puro devuelve 201 sin payload)
+      const { data: created, error } = await supabase
         .from('exercises')
         .insert([{
           name: exerciseData.name,
@@ -221,13 +332,51 @@ export default function EntrenosPage() {
           default_sets: exerciseData.default_sets,
           default_reps: exerciseData.default_reps
         }] as any)
+        .select('*')
+        .single()
+
       if (error) throw error
+
+      // Añadimos al estado local para ver el nuevo en el selector sin esperar al reload
+      if (created) {
+        setExercises(prev => [...prev, created as Exercise].sort((a, b) => (a.name || '').localeCompare(b.name || '')))
+      }
 
       setExerciseData({ name: '', muscle: '', default_sets: 3, default_reps: 10 })
       setShowCreateExercise(false)
-      if (user) await loadData(user.id)
+      if (user) await loadAll(user.id)
     } catch (error) {
       console.error('Error creating exercise:', error)
+    }
+  }
+
+  // === Sesiones ===
+
+  const startSessionFromWorkout = async (workoutId: string) => {
+    if (!user) return
+    const { data, error } = await (supabase as any)
+      .from('workout_sessions')
+      .insert({
+        user_id: user.id,
+        workout_id: workoutId,
+        started_at: new Date().toISOString(),
+        completed_at: null
+      })
+      .select('id')
+      .single()
+
+    if (error) {
+      console.error('start session error', error)
+      return
+    }
+    const id = String(data.id)
+    setOpenSessionId(id)
+    router.push(`/entrenos/log/${id}`)
+  }
+
+  const continueOpenSession = () => {
+    if (openSessionId) {
+      router.push(`/entrenos/log/${openSessionId}`)
     }
   }
 
@@ -247,6 +396,20 @@ export default function EntrenosPage() {
         </div>
       </div>
 
+      {/* CTA sesión en curso */}
+      {openSessionId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sesión en curso</CardTitle>
+          </CardHeader>
+          <CardContent className="flex justify-between items-center">
+            <div>¡Tienes una sesión sin completar!</div>
+            <Button onClick={continueOpenSession}>Continuar</Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Crear / Editar Rutina */}
       {showCreateWorkout && (
         <Card>
           <CardHeader>
@@ -435,6 +598,7 @@ export default function EntrenosPage() {
         </Card>
       )}
 
+      {/* Crear Ejercicio */}
       {showCreateExercise && (
         <Card>
           <CardHeader>
@@ -504,6 +668,7 @@ export default function EntrenosPage() {
         </Card>
       )}
 
+      {/* Listado de rutinas */}
       <div className="space-y-4">
         {loading ? (
           <div>Cargando...</div>
@@ -514,6 +679,13 @@ export default function EntrenosPage() {
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-lg">{workout.name}</CardTitle>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => startSessionFromWorkout(workout.id)}
+                    >
+                      Empezar sesión
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -591,6 +763,62 @@ export default function EntrenosPage() {
         ) : (
           <div className="text-center text-gray-500">No hay rutinas creadas</div>
         )}
+      </div>
+
+      {/* Últimas sesiones + PRs */}
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader><CardTitle>Últimas sesiones</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {recentSessions.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Aún no hay sesiones</div>
+            ) : (
+              recentSessions.map(s => (
+                <div key={s.id} className="flex items-center justify-between border rounded p-2">
+                  <div>
+                    <div className="font-medium">{s.workouts?.name ?? 'Sesión'}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.started_at ? new Date(s.started_at).toLocaleString('es-ES') : '—'}
+                      {s.completed_at ? ' · Completada' : ' · En curso'}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    {!s.completed_at && (
+                      <Button size="sm" variant="outline" onClick={() => router.push(`/entrenos/log/${s.id}`)}>
+                        Continuar
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+            <div className="pt-2">
+              <Button variant="outline" size="sm" onClick={() => router.push('/entrenos/history')}>
+                Ver historial
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>PRs recientes</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {prs.length === 0 ? (
+              <div className="text-sm text-muted-foreground">Sin PRs registrados</div>
+            ) : (
+              prs.map((p, i) => (
+                <div key={i} className="flex items-center justify-between border rounded p-2">
+                  <div className="font-medium">{p.exercise?.name ?? p.exercise_id}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {p.best_weight_kg ? `${p.best_weight_kg}kg` : ''} {p.best_reps ? `× ${p.best_reps}` : ''}
+                    {' · '}
+                    {new Date(p.achieved_at).toLocaleDateString('es-ES')}
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

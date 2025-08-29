@@ -10,7 +10,7 @@ export const supabase = createClientComponentClient<Database>()
 // Service role client for server-side operations (use with caution)
 export const supabaseAdmin = createClient<Database>(
   supabaseUrl,
-  process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
   {
     db: {
       schema: 'public'

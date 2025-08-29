@@ -17,6 +17,23 @@ type SetDraft = {
   is_backoff?: boolean
 }
 
+type WorkoutExerciseTemplate = {
+  exercise_id: string
+  sets: number | null
+  reps: number | null
+  rir: number | null
+  rest_seconds: number | null
+}
+
+type SessionWithWorkout = {
+  id: string
+  workout_id: string | null
+  workout: {
+    id: string
+    exercises: WorkoutExerciseTemplate[]
+  } | null
+}
+
 export default function SessionLogPage() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const { user, supabase } = useSupabase()
@@ -28,41 +45,59 @@ export default function SessionLogPage() {
   useEffect(() => {
     (async () => {
       if (!user) return
-      // ejercicio catálogo
-      const { data: ex } = await supabase.from('exercises').select('id, name').order('name')
-      setExercises(ex as any[] || [])
+      setLoading(true)
 
-      // si la sesión se creó desde una rutina, precargar ejercicios de la rutina
-      const { data: sess } = await supabase
+      // catálogo de ejercicios
+      const { data: ex } = await supabase
+        .from('exercises')
+        .select('id, name')
+        .order('name', { ascending: true })
+      setExercises((ex as any[] ?? []).map(e => ({ id: String(e.id), name: String(e.name) })))
+
+      // sesión + rutina (si existe)
+      const { data: sessRaw } = await supabase
         .from('workout_sessions')
-        .select('id, workout_id, workouts:workout_id ( id, exercises:workout_exercises ( exercise_id, sets, reps, rir, rest_seconds ) )')
+        .select(`
+          id,
+          workout_id,
+          workout:workouts(
+            id,
+            exercises:workout_exercises(
+              exercise_id, sets, reps, rir, rest_seconds
+            )
+          )
+        `)
         .eq('id', sessionId)
-        .single()
+        .maybeSingle()
 
-      const wex = (sess?.workouts?.exercises as any[]) || []
+      const sess = (sessRaw as unknown) as SessionWithWorkout | null
+      const wex = (sess?.workout?.exercises ?? []) as WorkoutExerciseTemplate[]
+
       if (wex.length) {
         const draft: SetDraft[] = []
-        wex.forEach((we: any) => {
-          for (let i = 1; i <= (we.sets || 3); i++) {
+        for (const we of wex) {
+          const totalSets = Number(we.sets ?? 3)
+          for (let i = 1; i <= totalSets; i++) {
             draft.push({
-              exercise_id: we.exercise_id,
+              exercise_id: String(we.exercise_id),
               set_index: i,
-              reps: we.reps || undefined,
-              rir: we.rir || undefined,
+              reps: we.reps ?? undefined,
+              rir: we.rir ?? undefined,
             })
           }
-        })
+        }
         setRows(draft)
       }
+
       setLoading(false)
     })()
   }, [user, sessionId, supabase])
 
   const addEmptyRow = () => {
-    setRows(r => ([
-      ...r,
-      { exercise_id: '', set_index: (r.slice().reverse().find(x => x.exercise_id === '')?.set_index || 0) + 1 }
-    ]))
+    setRows(r => {
+      const lastIndexForEmpty = r.slice().reverse().find(x => !x.exercise_id)?.set_index ?? 0
+      return [...r, { exercise_id: '', set_index: lastIndexForEmpty + 1 }]
+    })
   }
 
   const saveAll = async () => {
@@ -77,24 +112,27 @@ export default function SessionLogPage() {
         reps: r.reps ?? null,
         rir: r.rir ?? null,
         is_warmup: r.is_warmup ?? false,
-        is_backoff: r.is_backoff ?? false
+        is_backoff: r.is_backoff ?? false,
       }))
+
     if (!payload.length) return
 
     const { error } = await (supabase as any)
       .from('session_sets')
       .insert(payload)
 
-    if (!error) {
-      // marcar sesión completada
-      await (supabase as any)
-        .from('workout_sessions')
-        .update({ completed_at: new Date().toISOString() })
-        .eq('id', sessionId)
-      router.push('/train/history')
-    } else {
-      console.error(error)
+    if (error) {
+      console.error('save sets error', error)
+      return
     }
+
+    // marcar fin de sesión (ajusta si tu columna se llama distinto)
+    await (supabase as any)
+      .from('workout_sessions')
+      .update({ completed_at: new Date().toISOString() })
+      .eq('id', sessionId)
+
+    router.push('/entrenos/history')
   }
 
   if (loading) return <div className="p-4">Cargando…</div>
@@ -122,22 +160,37 @@ export default function SessionLogPage() {
                 </select>
               </div>
               <div className="col-span-2">
-                <Input type="number" placeholder="Peso (kg)" value={r.weight_kg ?? ''} onChange={e => {
-                  const v = e.target.value ? Number(e.target.value) : undefined
-                  setRows(prev => prev.map((x, idx) => idx === i ? { ...x, weight_kg: v } : x))
-                }} />
+                <Input
+                  type="number"
+                  placeholder="Peso (kg)"
+                  value={r.weight_kg ?? ''}
+                  onChange={e => {
+                    const v = e.target.value ? Number(e.target.value) : undefined
+                    setRows(prev => prev.map((x, idx) => idx === i ? { ...x, weight_kg: v } : x))
+                  }}
+                />
               </div>
               <div className="col-span-2">
-                <Input type="number" placeholder="Reps" value={r.reps ?? ''} onChange={e => {
-                  const v = e.target.value ? Number(e.target.value) : undefined
-                  setRows(prev => prev.map((x, idx) => idx === i ? { ...x, reps: v } : x))
-                }} />
+                <Input
+                  type="number"
+                  placeholder="Reps"
+                  value={r.reps ?? ''}
+                  onChange={e => {
+                    const v = e.target.value ? Number(e.target.value) : undefined
+                    setRows(prev => prev.map((x, idx) => idx === i ? { ...x, reps: v } : x))
+                  }}
+                />
               </div>
               <div className="col-span-2">
-                <Input type="number" placeholder="RIR" value={r.rir ?? ''} onChange={e => {
-                  const v = e.target.value ? Number(e.target.value) : undefined
-                  setRows(prev => prev.map((x, idx) => idx === i ? { ...x, rir: v } : x))
-                }} />
+                <Input
+                  type="number"
+                  placeholder="RIR"
+                  value={r.rir ?? ''}
+                  onChange={e => {
+                    const v = e.target.value ? Number(e.target.value) : undefined
+                    setRows(prev => prev.map((x, idx) => idx === i ? { ...x, rir: v } : x))
+                  }}
+                />
               </div>
               <div className="col-span-1 text-right">
                 <Button variant="ghost" size="sm" onClick={() => setRows(prev => prev.filter((_, idx) => idx !== i))}>✕</Button>
