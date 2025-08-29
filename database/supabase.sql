@@ -139,21 +139,6 @@ CREATE TABLE public.workouts (
   is_boxing BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-CREATE TABLE public.exercise_prs (
-  user_id uuid NOT NULL,
-  exercise_id uuid NOT NULL,
-  best_est_1rm_kg numeric,
-  session_id uuid,
-  session_set_id uuid,
-  pr_type text,
-  value_numeric numeric,
-  achieved_at timestamp with time zone NOT NULL DEFAULT now(),
-  best_weight_kg numeric,
-  best_reps integer,
-  CONSTRAINT exercise_prs_pkey PRIMARY KEY (user_id, exercise_id),
-  CONSTRAINT exercise_prs_exercise_id_fkey FOREIGN KEY (exercise_id) REFERENCES public.exercises(id),
-  CONSTRAINT exercise_prs_session_set_id_fkey FOREIGN KEY (session_set_id) REFERENCES public.session_sets(id),
-  CONSTRAINT exercise_prs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.workout_sessions(id)
 );
 
 -- Exercises
@@ -166,6 +151,40 @@ CREATE TABLE public.exercises (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Workout sessions
+CREATE TABLE public.workout_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE SET NULL,
+  session_date DATE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')::DATE,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  rpe_session NUMERIC,
+  bodyweight_kg NUMERIC,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Session sets
+CREATE TABLE public.session_sets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES public.workout_sessions(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  set_index INTEGER NOT NULL,
+  weight_kg NUMERIC,
+  reps INTEGER,
+  rir NUMERIC,
+  is_warmup BOOLEAN NOT NULL DEFAULT FALSE,
+  is_backoff BOOLEAN NOT NULL DEFAULT FALSE,
+  seconds_rest INTEGER,
+  tonnage_kg NUMERIC GENERATED ALWAYS AS ((COALESCE(weight_kg,0) * COALESCE(reps,0))::NUMERIC) STORED,
+  est_1rm_kg NUMERIC GENERATED ALWAYS AS (estimate_1rm(weight_kg, reps)) STORED,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+
 
 -- Workout exercises
 CREATE TABLE public.workout_exercises (
@@ -220,36 +239,9 @@ CREATE TABLE public.checkins (
   UNIQUE (user_id, week_start)
 );
 
--- Workout sessions
-CREATE TABLE public.workout_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  workout_id UUID REFERENCES public.workouts(id) ON DELETE SET NULL,
-  session_date DATE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')::DATE,
-  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  completed_at TIMESTAMPTZ,
-  rpe_session NUMERIC,
-  bodyweight_kg NUMERIC,
-  notes TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
--- Session sets
-CREATE TABLE public.session_sets (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  session_id UUID NOT NULL REFERENCES public.workout_sessions(id) ON DELETE CASCADE,
-  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
-  set_index INTEGER NOT NULL,
-  weight_kg NUMERIC,
-  reps INTEGER,
-  rir NUMERIC,
-  is_warmup BOOLEAN NOT NULL DEFAULT FALSE,
-  is_backoff BOOLEAN NOT NULL DEFAULT FALSE,
-  seconds_rest INTEGER,
-  tonnage_kg NUMERIC GENERATED ALWAYS AS ((COALESCE(weight_kg,0) * COALESCE(reps,0))::NUMERIC) STORED,
-  est_1rm_kg NUMERIC GENERATED ALWAYS AS (estimate_1rm(weight_kg, reps)) STORED,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+
+
 
 -- Exercise personal records
 CREATE TABLE public.exercise_prs (
@@ -313,11 +305,6 @@ CREATE TRIGGER trg_workout_sessions_updated BEFORE UPDATE ON public.workout_sess
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_session_sets_updated BEFORE UPDATE ON public.session_sets
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Trigger to create profile when a new auth user signs up
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- Trigger to maintain food favourites
 CREATE OR REPLACE FUNCTION public.tg_upsert_food_favorite()
