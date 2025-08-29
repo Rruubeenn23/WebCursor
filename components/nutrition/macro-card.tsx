@@ -1,93 +1,60 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { MacroGoals, calculateProgress } from '@/lib/utils'
+import React from 'react'
 
-interface MacroCardProps {
+export type MacroGoals = {
+  kcal: number
+  protein: number
+  carbs: number
+  fat: number
+}
+
+interface Props {
+  title?: string
   goals: MacroGoals
   consumed: MacroGoals
-  title?: string
-  className?: string
+  planned?: MacroGoals // opcional futuro: para mostrar planificado vs consumido
 }
 
-export function MacroCard({ goals, consumed, title = "Macros del día", className }: MacroCardProps) {
-  const remaining = {
-    kcal: Math.max(0, goals.kcal - consumed.kcal),
-    protein: Math.max(0, goals.protein - consumed.protein),
-    carbs: Math.max(0, goals.carbs - consumed.carbs),
-    fat: Math.max(0, goals.fat - consumed.fat),
-  }
-
-  const progress = {
-    kcal: calculateProgress(consumed.kcal, goals.kcal),
-    protein: calculateProgress(consumed.protein, goals.protein),
-    carbs: calculateProgress(consumed.carbs, goals.carbs),
-    fat: calculateProgress(consumed.fat, goals.fat),
-  }
-
+function Line({ label, value, goal }: { label: string; value: number; goal: number }) {
+  const pct = Math.max(0, Math.min(100, goal > 0 ? (value / goal) * 100 : 0))
+  const remaining = Math.max(0, Math.round((goal - value) * 10) / 10)
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Calories */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Calorías</span>
-            <span className="font-medium">
-              {consumed.kcal} / {goals.kcal} kcal
-            </span>
-          </div>
-          <Progress value={progress.kcal} className="h-2" />
-          <div className="text-xs text-muted-foreground">
-            Restantes: {remaining.kcal} kcal
-          </div>
-        </div>
-
-        {/* Protein */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Proteína</span>
-            <span className="font-medium">
-              {consumed.protein}g / {goals.protein}g
-            </span>
-          </div>
-          <Progress value={progress.protein} className="h-2" />
-          <div className="text-xs text-muted-foreground">
-            Restantes: {remaining.protein}g
-          </div>
-        </div>
-
-        {/* Carbs */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Carbohidratos</span>
-            <span className="font-medium">
-              {consumed.carbs}g / {goals.carbs}g
-            </span>
-          </div>
-          <Progress value={progress.carbs} className="h-2" />
-          <div className="text-xs text-muted-foreground">
-            Restantes: {remaining.carbs}g
-          </div>
-        </div>
-
-        {/* Fat */}
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Grasas</span>
-            <span className="font-medium">
-              {consumed.fat}g / {goals.fat}g
-            </span>
-          </div>
-          <Progress value={progress.fat} className="h-2" />
-          <div className="text-xs text-muted-foreground">
-            Restantes: {remaining.fat}g
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-1">
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">
+          {Math.round(value * 10) / 10} / {goal} <span className="text-muted-foreground">({remaining} restantes)</span>
+        </span>
+      </div>
+      <div className="h-2 w-full rounded bg-muted/60 overflow-hidden">
+        <div
+          className="h-2 rounded bg-primary transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   )
 }
+
+export function MacroCard({ title = 'Progreso', goals, consumed }: Props) {
+  return (
+    <div className="rounded-xl border p-4 space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <p className="text-sm text-muted-foreground">
+          Consumido vs objetivo del día
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <Line label="Calorías" value={consumed.kcal} goal={goals.kcal} />
+        <Line label="Proteína (g)" value={consumed.protein} goal={goals.protein} />
+        <Line label="Carbohidratos (g)" value={consumed.carbs} goal={goals.carbs} />
+        <Line label="Grasa (g)" value={consumed.fat} goal={goals.fat} />
+      </div>
+    </div>
+  )
+}
+
+export default MacroCard
