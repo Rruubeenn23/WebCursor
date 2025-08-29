@@ -12,6 +12,7 @@ Tu hub personal para entrenamiento, nutrición y automatizaciones. Una aplicaci�
 - **Gestión de Entrenos**: CRUD de rutinas y ejercicios con tipos (Gimnasio/Boxeo)
 - **Chatbot de Nutrición**: Análisis de macros mediante IA para comidas no predefinidas
 - **Seguimiento de Macros**: Cálculo automático de calorías, proteínas, carbohidratos y grasas
+- **Calculadora de IMC**: Evalúa tu índice de masa corporal y su categoría
 - **Ajustes Personalizados**: Metas nutricionales y configuración de zona horaria
 
 ### 🤖 Automatizaciones (n8n)

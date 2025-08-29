@@ -1,10 +1,8 @@
-import { NextRequest } from 'next/server'
 import { GET } from '@/app/api/health/route'
 
 describe('/api/health', () => {
   it('should return health status', async () => {
-    const request = new NextRequest('https://web-cursor-five.vercel.app/api/health')
-    const response = await GET(request)
+    const response = await GET()
     const data = await response.json()
 
     expect(response.status).toBe(200)
