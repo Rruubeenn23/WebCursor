@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Utensils, Flame } from 'lucide-react'
+import { Plus, Utensils, Flame, CopyPlus, LayoutTemplate } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,9 +12,16 @@ import {
 interface Props {
   onAddFood: () => void
   onQuickAdd: () => void
+  onApplyTemplate?: () => void
+  onDuplicateDay?: () => void
 }
 
-export default function TodayFab({ onAddFood, onQuickAdd }: Props) {
+export default function TodayFab({
+  onAddFood,
+  onQuickAdd,
+  onApplyTemplate,
+  onDuplicateDay,
+}: Props) {
   return (
     <div className="fixed bottom-6 right-6 z-50">
       <DropdownMenu>
@@ -24,18 +31,16 @@ export default function TodayFab({ onAddFood, onQuickAdd }: Props) {
             className="h-14 w-14 rounded-full p-0 grid place-items-center shadow-xl"
             aria-label="Acciones rápidas"
           >
-            {/* Forzamos el color del icono y un trazo más grueso para que se vea siempre */}
             <Plus className="h-7 w-7 text-white" strokeWidth={3} />
           </Button>
         </DropdownMenuTrigger>
 
-        {/* Abrimos el menú hacia arriba y separado para que no tape el FAB */}
         <DropdownMenuContent
           side="top"
           align="end"
           sideOffset={14}
           alignOffset={-4}
-          className="rounded-xl shadow-2xl p-1 w-48"
+          className="rounded-xl shadow-2xl p-1 w-56"
         >
           <DropdownMenuItem
             className="cursor-pointer rounded-lg px-3 py-2"
@@ -44,6 +49,7 @@ export default function TodayFab({ onAddFood, onQuickAdd }: Props) {
             <Utensils className="mr-2 h-4 w-4" />
             <span>Añadir alimento</span>
           </DropdownMenuItem>
+
           <DropdownMenuItem
             className="cursor-pointer rounded-lg px-3 py-2"
             onClick={onQuickAdd}
@@ -51,6 +57,26 @@ export default function TodayFab({ onAddFood, onQuickAdd }: Props) {
             <Flame className="mr-2 h-4 w-4" />
             <span>Entrada rápida</span>
           </DropdownMenuItem>
+
+          {onApplyTemplate && (
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg px-3 py-2"
+              onClick={onApplyTemplate}
+            >
+              <LayoutTemplate className="mr-2 h-4 w-4" />
+              <span>Aplicar plantilla</span>
+            </DropdownMenuItem>
+          )}
+
+          {onDuplicateDay && (
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg px-3 py-2"
+              onClick={onDuplicateDay}
+            >
+              <CopyPlus className="mr-2 h-4 w-4" />
+              <span>Duplicar día</span>
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

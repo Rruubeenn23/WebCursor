@@ -14,7 +14,8 @@ import {
   X,
   LogOut,
   Bot,
-  ClipboardCheck 
+  ClipboardCheck,
+  CalendarCheck
 } from 'lucide-react'
 import { useState } from 'react'
 import { useSupabase } from '@/components/providers/supabase-provider'
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'Comidas', href: '/comidas', icon: Utensils },
   { name: 'Entrenos', href: '/entrenos', icon: Dumbbell },
   { name: 'Check-ins', href: '/check-ins', icon: ClipboardCheck },
+  { name: 'Historial', href: '/historial', icon: CalendarCheck },
   { name: 'Chatbot', href: '/chatbot', icon: Bot },
   { name: 'Ajustes', href: '/ajustes', icon: Settings },
 ]

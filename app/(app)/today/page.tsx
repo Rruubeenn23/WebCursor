@@ -8,20 +8,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, Circle, Clock, Utensils } from 'lucide-react'
 import { MacroGoals, getCurrentDate, formatTime } from '@/lib/utils'
-import type { Database } from '@/types/database'
 import TodayFab from './fab'
 import QuickAddDialog from './quick-add-dialog'
 import AddFoodDialog from './add-food-dialog'
-
-type SupabaseClient = ReturnType<typeof useSupabase>['supabase']
+import SelectTemplateDialog from './select-template-dialog'
+import DuplicateDayDialog from './duplicate-day-dialog'
 
 interface DayPlanItem {
   id: string
   entry_type: 'food' | 'quick'
-  food?: {
-    name: string
-    unit: string
-  } | null
+  food?: { name: string; unit: string } | null
   qty_units: number
   time: string
   done: boolean
@@ -46,13 +42,15 @@ const DEFAULT_GOALS: MacroGoals = { kcal: 2000, protein: 150, carbs: 200, fat: 6
 export default function TodayPage() {
   const router = useRouter()
   const { user, supabase } = useSupabase()
-  const supabaseClient = supabase as any
   const [userId, setUserId] = useState<string | null>(null)
   const [data, setData] = useState<TodayData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  // diálogos
   const [openQuick, setOpenQuick] = useState(false)
   const [openFood, setOpenFood] = useState(false)
-
+  const [openTemplate, setOpenTemplate] = useState(false)
+  const [openDuplicate, setOpenDuplicate] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -71,6 +69,7 @@ export default function TodayPage() {
       setLoading(true)
       const today = getCurrentDate()
 
+      // Goals (último registro del usuario o DEFAULT)
       const goalsResp = await supabase
         .from('goals')
         .select('*')
@@ -78,9 +77,9 @@ export default function TodayPage() {
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-      const goalsData = goalsResp.data as Partial<MacroGoals> | null
+      const goalsData = (goalsResp.data as Partial<MacroGoals> | null) ?? null
 
-
+      // Plan de hoy
       const planResp = await supabase
         .from('day_plans')
         .select('id, training_day')
@@ -88,16 +87,6 @@ export default function TodayPage() {
         .eq('date', today)
         .maybeSingle()
       const planData = (planResp.data as { id: string; training_day?: boolean } | null) ?? null
-
-      const itemsResp = await supabase
-        .from('day_plan_items')
-        .select(`
-          id, entry_type, qty_units, time, done, macros_override,
-          food:foods!day_plan_items_food_id_fkey(name, unit, kcal, protein_g, carbs_g, fat_g)
-        `)
-        .eq('day_plan_id', planData!.id)
-        .order('time')
-
 
       let meals: DayPlanItem[] = []
       const consumed: MacroGoals = { kcal: 0, protein: 0, carbs: 0, fat: 0 }
@@ -115,10 +104,9 @@ export default function TodayPage() {
             food:foods(name, unit, kcal, protein_g, carbs_g, fat_g)
           `)
           .eq('day_plan_id', planData.id)
-          .order('meal_time')
+          .order('time', { ascending: true })
 
         const mealItems = (itemsResp.data as any[] | null) ?? []
-
         meals = mealItems.map((item) => {
           const isQuick = item.entry_type === 'quick'
           const macros = isQuick
@@ -172,7 +160,7 @@ export default function TodayPage() {
         consumed,
         meals,
         trainingDay: Boolean(planData?.training_day),
-        planId: planData?.id
+        planId: planData?.id,
       })
     } catch (error) {
       console.error('Error loading today data:', error)
@@ -182,9 +170,49 @@ export default function TodayPage() {
     }
   }
 
+  // ⬇️ ⬇️ ⬇️  AQUÍ está la función que faltaba
+  const handleAddMeal = async (foodId: string, qtyUnits: number, time: string) => {
+    if (!user) return
+    const today = getCurrentDate()
+
+    // asegurar plan del día
+    let planId = data?.planId
+    if (!planId) {
+      const { data: newPlan, error: planErr } = await (supabase as any)
+        .from('day_plans')
+        .insert({ user_id: user.id, date: today, training_day: false })
+        .select('id')
+        .single()
+      if (planErr) {
+        console.error('create plan error', planErr)
+        return
+      }
+      planId = newPlan?.id
+    }
+
+    // insertar item
+    const { error: itemErr } = await (supabase as any)
+      .from('day_plan_items')
+      .insert({
+        day_plan_id: planId,
+        entry_type: 'food',
+        food_id: foodId,
+        qty_units: qtyUnits,
+        time,
+        done: true,
+      })
+    if (itemErr) {
+      console.error('add item error', itemErr)
+      return
+    }
+
+    if (userId) await loadTodayData(userId)
+  }
+  // ⬆️ ⬆️ ⬆️
+
   const toggleMealDone = async (itemId: string, done: boolean) => {
     try {
-      await supabaseClient
+      await (supabase as any)
         .from('day_plan_items')
         .update({ done })
         .eq('id', itemId)
@@ -301,8 +329,11 @@ export default function TodayPage() {
       <TodayFab
         onAddFood={() => setOpenFood(true)}
         onQuickAdd={() => setOpenQuick(true)}
+        onApplyTemplate={() => setOpenTemplate(true)}
+        onDuplicateDay={() => setOpenDuplicate(true)}
       />
 
+      {/* Diálogos */}
       <QuickAddDialog
         open={openQuick}
         onOpenChange={setOpenQuick}
@@ -313,8 +344,19 @@ export default function TodayPage() {
       <AddFoodDialog
         open={openFood}
         onOpenChange={setOpenFood}
-        userId={userId}
-        onCreated={() => loadTodayData(userId)}
+        onAddMeal={handleAddMeal}
+      />
+
+      <SelectTemplateDialog
+        open={openTemplate}
+        onOpenChange={setOpenTemplate}
+        onApplied={() => { if (userId) loadTodayData(userId) }}
+      />
+
+      <DuplicateDayDialog
+        open={openDuplicate}
+        onOpenChange={setOpenDuplicate}
+        onCopied={() => { if (userId) loadTodayData(userId) }}
       />
     </div>
   )
