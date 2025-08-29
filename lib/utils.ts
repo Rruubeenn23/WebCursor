@@ -122,3 +122,19 @@ export function getDayName(date: string): string {
   const dayIndex = new Date(date).getDay()
   return dayNames[dayIndex]
 }
+
+// Calculate Body Mass Index
+export function calculateBMI(weightKg: number, heightCm: number): number {
+  const heightM = heightCm / 100
+  if (heightM <= 0) return 0
+  return Math.round((weightKg / (heightM * heightM)) * 10) / 10
+}
+
+// Get BMI category in Spanish
+export function getBMICategory(bmi: number): string {
+  if (bmi === 0) return 'Desconocido'
+  if (bmi < 18.5) return 'Bajo peso'
+  if (bmi < 25) return 'Normal'
+  if (bmi < 30) return 'Sobrepeso'
+  return 'Obesidad'
+}
