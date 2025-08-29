@@ -51,6 +51,8 @@ CREATE TABLE public.exercise_prs (
   best_est_1rm_kg numeric,
   session_id uuid,
   session_set_id uuid,
+  pr_type text,
+  value_numeric numeric,
   achieved_at timestamp with time zone NOT NULL DEFAULT now(),
   best_weight_kg numeric,
   best_reps integer,
