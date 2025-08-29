@@ -106,7 +106,6 @@ CREATE TABLE public.day_plans (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, date)
 );
-
 -- Day plan items
 CREATE TABLE public.day_plan_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -140,6 +139,21 @@ CREATE TABLE public.workouts (
   is_boxing BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE public.exercise_prs (
+  user_id uuid NOT NULL,
+  exercise_id uuid NOT NULL,
+  best_est_1rm_kg numeric,
+  session_id uuid,
+  session_set_id uuid,
+  pr_type text,
+  value_numeric numeric,
+  achieved_at timestamp with time zone NOT NULL DEFAULT now(),
+  best_weight_kg numeric,
+  best_reps integer,
+  CONSTRAINT exercise_prs_pkey PRIMARY KEY (user_id, exercise_id),
+  CONSTRAINT exercise_prs_exercise_id_fkey FOREIGN KEY (exercise_id) REFERENCES public.exercises(id),
+  CONSTRAINT exercise_prs_session_set_id_fkey FOREIGN KEY (session_set_id) REFERENCES public.session_sets(id),
+  CONSTRAINT exercise_prs_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.workout_sessions(id)
 );
 
 -- Exercises
