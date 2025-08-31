@@ -122,3 +122,61 @@ export function getDayName(date: string): string {
   const dayIndex = new Date(date).getDay()
   return dayNames[dayIndex]
 }
+
+// Calculate Body Mass Index
+export function calculateBMI(weightKg: number, heightCm: number): number {
+  const heightM = heightCm / 100
+  if (heightM <= 0) return 0
+  return Math.round((weightKg / (heightM * heightM)) * 10) / 10
+}
+
+// Get BMI category in Spanish
+export function getBMICategory(bmi: number): string {
+  if (bmi === 0) return 'Desconocido'
+  if (bmi < 18.5) return 'Bajo peso'
+  if (bmi < 25) return 'Normal'
+  if (bmi < 30) return 'Sobrepeso'
+  return 'Obesidad'
+}
+
+// Parameters for BMR calculation
+export interface BMRParams {
+  weightKg: number
+  heightCm: number
+  age: number
+  sex: 'male' | 'female'
+}
+
+// Calculate Basal Metabolic Rate using Mifflin-St Jeor formula
+export function calculateBMR({
+  weightKg,
+  heightCm,
+  age,
+  sex,
+}: BMRParams): number {
+  const base = 10 * weightKg + 6.25 * heightCm - 5 * age
+  const sexConst = sex === 'male' ? 5 : -161
+  return Math.round(base + sexConst)
+}
+
+export type ActivityLevel =
+  | 'sedentary'
+  | 'light'
+  | 'moderate'
+  | 'active'
+  | 'veryActive'
+
+// Estimate total daily energy expenditure based on activity level
+export function calculateTDEE(
+  bmr: number,
+  activity: ActivityLevel
+): number {
+  const factors: Record<ActivityLevel, number> = {
+    sedentary: 1.2,
+    light: 1.375,
+    moderate: 1.55,
+    active: 1.725,
+    veryActive: 1.9,
+  }
+  return Math.round(bmr * (factors[activity] ?? 1))
+}

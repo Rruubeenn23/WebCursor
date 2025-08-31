@@ -1,4 +1,11 @@
 import '@testing-library/jest-dom'
+import { fetch as whatwgFetch, Request as WhatwgRequest, Headers as WhatwgHeaders } from 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// Only polyfill if the global objects are missing
+if (!global.fetch) global.fetch = whatwgFetch
+if (!global.Request) global.Request = WhatwgRequest
+if (!global.Headers) global.Headers = WhatwgHeaders
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
