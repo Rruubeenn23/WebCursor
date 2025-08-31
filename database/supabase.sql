@@ -94,6 +94,19 @@ CREATE TABLE public.meal_template_items (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+);
+
+-- Meal template items
+CREATE TABLE public.meal_template_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  template_id UUID NOT NULL REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  qty_units NUMERIC NOT NULL,
+  time_hint TIME,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Day plans
 CREATE TABLE public.day_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -106,6 +119,7 @@ CREATE TABLE public.day_plans (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, date)
 );
+
 -- Day plan items
 CREATE TABLE public.day_plan_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -162,6 +176,19 @@ CREATE TABLE public.workout_exercises (
   reps INTEGER NOT NULL,
   rir INTEGER DEFAULT 2,
   rest_seconds INTEGER DEFAULT 90,
+);
+
+-- Workouts
+CREATE TABLE public.workouts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_gym BOOLEAN DEFAULT FALSE,
+  is_boxing BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Schedule
 CREATE TABLE public.schedule (
@@ -170,6 +197,39 @@ CREATE TABLE public.schedule (
   day_of_week INTEGER NOT NULL,
   workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
   meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+);
+-- Exercises
+CREATE TABLE public.exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  muscle TEXT NOT NULL,
+  default_sets INTEGER NOT NULL DEFAULT 3,
+  default_reps INTEGER NOT NULL DEFAULT 10,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+-- Workout exercises
+CREATE TABLE public.workout_exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workout_id UUID NOT NULL REFERENCES public.workouts(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  "order" INTEGER NOT NULL,
+  sets INTEGER NOT NULL,
+  reps INTEGER NOT NULL,
+  rir INTEGER DEFAULT 2,
+  rest_seconds INTEGER DEFAULT 90,
+  );
+
+-- Schedule
+CREATE TABLE public.schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+  meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+  );
 
 -- Meal logs
 CREATE TABLE public.logs_meals (
@@ -199,10 +259,21 @@ CREATE TABLE public.checkins (
   UNIQUE (user_id, week_start)
 );
 
+-- Water intake logs
+CREATE TABLE public.water_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  ml INTEGER NOT NULL CHECK (ml > 0),
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Workout sessions
 CREATE TABLE public.workout_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  );
 -- Workout exercises
 CREATE TABLE public.workout_exercises (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -325,6 +396,7 @@ CREATE TABLE public.exercise_prs (
   PRIMARY KEY (user_id, exercise_id, pr_type)
 );
 
+
 -- Workout sessions
 CREATE TABLE public.workout_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -445,6 +517,7 @@ CREATE INDEX idx_workout_exercises_workout_id ON public.workout_exercises(workou
 CREATE INDEX idx_schedule_user_day ON public.schedule(user_id, day_of_week);
 CREATE INDEX idx_logs_meals_user_logged_at ON public.logs_meals(user_id, logged_at);
 CREATE INDEX idx_checkins_user_week ON public.checkins(user_id, week_start);
+CREATE INDEX idx_water_logs_user_logged_at ON public.water_logs(user_id, logged_at);
 CREATE INDEX idx_sessions_user_date ON public.workout_sessions(user_id, session_date);
 CREATE INDEX idx_session_sets_session_id ON public.session_sets(session_id);
 CREATE INDEX idx_exercise_prs_user ON public.exercise_prs(user_id);
@@ -473,6 +546,8 @@ CREATE TRIGGER trg_workout_exercises_updated BEFORE UPDATE ON public.workout_exe
 CREATE TRIGGER trg_schedule_updated BEFORE UPDATE ON public.schedule
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_logs_meals_updated BEFORE UPDATE ON public.logs_meals
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER trg_water_logs_updated BEFORE UPDATE ON public.water_logs
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER trg_workout_sessions_updated BEFORE UPDATE ON public.workout_sessions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -739,6 +814,7 @@ ALTER TABLE public.workout_exercises ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.schedule        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.logs_meals      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.checkins        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.water_logs      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workout_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.session_sets    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.exercise_prs    ENABLE ROW LEVEL SECURITY;
@@ -802,6 +878,9 @@ CREATE POLICY "Users manage own meal logs" ON public.logs_meals
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users manage own checkins" ON public.checkins
+  USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users manage own water logs" ON public.water_logs
   USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 CREATE POLICY "Users manage own workout sessions" ON public.workout_sessions

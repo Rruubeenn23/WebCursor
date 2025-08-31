@@ -17,7 +17,8 @@ import {
   ClipboardCheck,
   CalendarCheck,
   Activity,
-  Flame
+  Flame,
+  Droplet
 } from 'lucide-react'
 import { useState } from 'react'
 import { useSupabase } from '@/components/providers/supabase-provider'
@@ -31,6 +32,7 @@ const navigation = [
   { name: 'Historial', href: '/historial', icon: CalendarCheck },
   { name: 'IMC', href: '/imc', icon: Activity },
   { name: 'BMR', href: '/bmr', icon: Flame },
+  { name: 'Agua', href: '/agua', icon: Droplet },
   { name: 'Chatbot', href: '/chatbot', icon: Bot },
   { name: 'Ajustes', href: '/ajustes', icon: Settings },
 ]
