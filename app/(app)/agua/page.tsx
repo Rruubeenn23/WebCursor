@@ -27,6 +27,7 @@ export default function AguaPage() {
     const fetchLogs = async () => {
       const startOfDay = new Date()
       startOfDay.setHours(0, 0, 0, 0)
+
       const { data } = await supabase
         .from('water_logs')
         .select('id, ml, logged_at')
@@ -46,11 +47,11 @@ export default function AguaPage() {
 
     const { data } = await supabase
       .from('water_logs')
-      .insert({ user_id: user.id, ml })
+      .insert([{ user_id: user.id, ml }]) // <-- array y tipado correcto
       .select('id, ml, logged_at')
       .single()
 
-    setLogs((prev) => [...prev, ...(data ? [data as WaterLog] : [])])
+    if (data) setLogs(prev => [...prev, data as WaterLog])
     setAmount('')
   }
 
@@ -67,9 +68,7 @@ export default function AguaPage() {
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />
-          <Button onClick={addLog} disabled={!amount}>
-            Añadir
-          </Button>
+        <Button onClick={addLog} disabled={!amount}>Añadir</Button>
         </div>
         <div>
           <p className="text-sm mb-2">
@@ -81,4 +80,3 @@ export default function AguaPage() {
     </Card>
   )
 }
-
