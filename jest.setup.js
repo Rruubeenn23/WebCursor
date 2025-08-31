@@ -6,6 +6,22 @@ import { fetch as whatwgFetch, Request as WhatwgRequest, Headers as WhatwgHeader
 if (!global.fetch) global.fetch = whatwgFetch
 if (!global.Request) global.Request = WhatwgRequest
 if (!global.Headers) global.Headers = WhatwgHeaders
+// Ensure fetch and related classes are available in the test environment
+// Explicitly assign them to the Node.js global scope so modules can use them
+global.fetch = fetch
+global.Request = Request
+global.Response = Response
+global.Headers = Headers
+import 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// jsdom only defines them on the window, so expose them globally for node modules
+if (typeof window !== 'undefined') {
+  global.fetch = window.fetch
+  global.Request = window.Request
+  global.Response = window.Response
+  global.Headers = window.Headers
+}
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
