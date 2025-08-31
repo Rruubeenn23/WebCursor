@@ -7,6 +7,16 @@ global.fetch = fetch
 global.Request = Request
 global.Response = Response
 global.Headers = Headers
+import 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// jsdom only defines them on the window, so expose them globally for node modules
+if (typeof window !== 'undefined') {
+  global.fetch = window.fetch
+  global.Request = window.Request
+  global.Response = window.Response
+  global.Headers = window.Headers
+}
 
 // Mock Next.js router
 jest.mock('next/router', () => ({
