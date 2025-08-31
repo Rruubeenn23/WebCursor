@@ -27,8 +27,8 @@ type SessionRow = {
 
 type PRRow = {
   exercise_id: string
-  best_weight_kg: number | null
-  best_reps: number | null
+  pr_type: string
+  value_numeric: number
   achieved_at: string
   exercise?: { name: string } | null
 }
@@ -150,8 +150,8 @@ export default function EntrenosPage() {
       // 5) PRs sin join embebido (tipado explícito para evitar 'never')
       type PRRow = {
         exercise_id: string | null
-        best_weight_kg: number | null
-        best_reps: number | null
+        pr_type: string | null
+        value_numeric: number | null
         achieved_at: string | null
       }
 
@@ -160,7 +160,7 @@ export default function EntrenosPage() {
       try {
         const { data: prsRaw, error: prsErr } = await supabase
           .from('exercise_prs')
-          .select('exercise_id, best_weight_kg, best_reps, achieved_at')
+          .select('exercise_id, pr_type, value_numeric, achieved_at')
           .eq('user_id', userId)
           .order('achieved_at', { ascending: false })
           .limit(20)
@@ -810,7 +810,11 @@ export default function EntrenosPage() {
                 <div key={i} className="flex items-center justify-between border rounded p-2">
                   <div className="font-medium">{p.exercise?.name ?? p.exercise_id}</div>
                   <div className="text-xs text-muted-foreground">
-                    {p.best_weight_kg ? `${p.best_weight_kg}kg` : ''} {p.best_reps ? `× ${p.best_reps}` : ''}
+                    {p.pr_type === 'weight'
+                      ? `${p.value_numeric}kg`
+                      : p.pr_type === 'reps'
+                        ? `${p.value_numeric} reps`
+                        : p.value_numeric}
                     {' · '}
                     {new Date(p.achieved_at).toLocaleDateString('es-ES')}
                   </div>
