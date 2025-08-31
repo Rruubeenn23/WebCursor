@@ -94,6 +94,19 @@ CREATE TABLE public.meal_template_items (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+);
+
+-- Meal template items
+CREATE TABLE public.meal_template_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  template_id UUID NOT NULL REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  qty_units NUMERIC NOT NULL,
+  time_hint TIME,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Day plans
 CREATE TABLE public.day_plans (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -163,6 +176,16 @@ CREATE TABLE public.workout_exercises (
   reps INTEGER NOT NULL,
   rir INTEGER DEFAULT 2,
   rest_seconds INTEGER DEFAULT 90,
+);
+
+-- Workouts
+CREATE TABLE public.workouts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_gym BOOLEAN DEFAULT FALSE,
+  is_boxing BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -174,9 +197,39 @@ CREATE TABLE public.schedule (
   day_of_week INTEGER NOT NULL,
   workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
   meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+);
+-- Exercises
+CREATE TABLE public.exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  muscle TEXT NOT NULL,
+  default_sets INTEGER NOT NULL DEFAULT 3,
+  default_reps INTEGER NOT NULL DEFAULT 10,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+
+-- Workout exercises
+CREATE TABLE public.workout_exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workout_id UUID NOT NULL REFERENCES public.workouts(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  "order" INTEGER NOT NULL,
+  sets INTEGER NOT NULL,
+  reps INTEGER NOT NULL,
+  rir INTEGER DEFAULT 2,
+  rest_seconds INTEGER DEFAULT 90,
+  );
+
+-- Schedule
+CREATE TABLE public.schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+  meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+  );
 
 -- Meal logs
 CREATE TABLE public.logs_meals (
@@ -220,6 +273,90 @@ CREATE TABLE public.water_logs (
 CREATE TABLE public.workout_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  );
+-- Workout exercises
+CREATE TABLE public.workout_exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workout_id UUID NOT NULL REFERENCES public.workouts(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  "order" INTEGER NOT NULL,
+  sets INTEGER NOT NULL,
+  reps INTEGER NOT NULL,
+  rir INTEGER DEFAULT 2,
+  rest_seconds INTEGER DEFAULT 90,
+);
+
+-- Food favourites
+CREATE TABLE public.food_favorites (
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  uses INT NOT NULL DEFAULT 0,
+  last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, food_id)
+);
+
+-- Workouts
+CREATE TABLE public.workouts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  is_gym BOOLEAN DEFAULT FALSE,
+  is_boxing BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Schedule
+CREATE TABLE public.schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+  meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+-- Exercises
+CREATE TABLE public.exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  muscle TEXT NOT NULL,
+  default_sets INTEGER NOT NULL DEFAULT 3,
+  default_reps INTEGER NOT NULL DEFAULT 10,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Meal logs
+CREATE TABLE public.logs_meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  qty_units NUMERIC NOT NULL,
+  meal_type TEXT NOT NULL,
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Weekly check-ins
+CREATE TABLE public.checkins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  weight_kg NUMERIC,
+  waist_cm NUMERIC,
+  sleep_h NUMERIC,
+  hunger_1_5 INT CHECK (hunger_1_5 BETWEEN 1 AND 5),
+  energy_1_5 INT CHECK (energy_1_5 BETWEEN 1 AND 5),
+  stress_1_5 INT CHECK (stress_1_5 BETWEEN 1 AND 5),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, week_start)
+);
+
+-- Workout sessions
+CREATE TABLE public.workout_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   workout_id UUID REFERENCES public.workouts(id) ON DELETE SET NULL,
   session_date DATE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')::DATE,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -257,6 +394,113 @@ CREATE TABLE public.exercise_prs (
   session_set_id UUID REFERENCES public.session_sets(id),
   achieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (user_id, exercise_id, pr_type)
+);
+
+
+-- Workout sessions
+CREATE TABLE public.workout_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE SET NULL,
+  session_date DATE NOT NULL DEFAULT (NOW() AT TIME ZONE 'utc')::DATE,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  rpe_session NUMERIC,
+  bodyweight_kg NUMERIC,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Session sets
+CREATE TABLE public.session_sets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  session_id UUID NOT NULL REFERENCES public.workout_sessions(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  set_index INTEGER NOT NULL,
+  weight_kg NUMERIC,
+  reps INTEGER,
+  rir NUMERIC,
+  is_warmup BOOLEAN NOT NULL DEFAULT FALSE,
+  is_backoff BOOLEAN NOT NULL DEFAULT FALSE,
+  seconds_rest INTEGER,
+  tonnage_kg NUMERIC GENERATED ALWAYS AS ((COALESCE(weight_kg,0) * COALESCE(reps,0))::NUMERIC) STORED,
+  est_1rm_kg NUMERIC GENERATED ALWAYS AS (estimate_1rm(weight_kg, reps)) STORED,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+
+
+
+-- Workout exercises
+CREATE TABLE public.workout_exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workout_id UUID NOT NULL REFERENCES public.workouts(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  "order" INTEGER NOT NULL,
+  sets INTEGER NOT NULL,
+  reps INTEGER NOT NULL,
+  rir INTEGER DEFAULT 2,
+  rest_seconds INTEGER DEFAULT 90,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Schedule
+CREATE TABLE public.schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+  meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Meal logs
+CREATE TABLE public.logs_meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  qty_units NUMERIC NOT NULL,
+  meal_type TEXT NOT NULL,
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Weekly check-ins
+CREATE TABLE public.checkins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  weight_kg NUMERIC,
+  waist_cm NUMERIC,
+  sleep_h NUMERIC,
+  hunger_1_5 INT CHECK (hunger_1_5 BETWEEN 1 AND 5),
+  energy_1_5 INT CHECK (energy_1_5 BETWEEN 1 AND 5),
+  stress_1_5 INT CHECK (stress_1_5 BETWEEN 1 AND 5),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, week_start)
+);
+
+
+
+
+
+-- Exercise personal records
+CREATE TABLE public.exercise_prs (
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  best_est_1rm_kg NUMERIC,
+  session_id UUID REFERENCES public.workout_sessions(id),
+  session_set_id UUID REFERENCES public.session_sets(id),
+  pr_type TEXT,
+  value_numeric NUMERIC,
+  achieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  best_weight_kg NUMERIC,
+  best_reps INTEGER,
+  PRIMARY KEY (user_id, exercise_id)
 );
 
 -- Indexes --------------------------------------------------------------------
