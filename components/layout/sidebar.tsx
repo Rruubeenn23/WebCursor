@@ -17,7 +17,8 @@ import {
   ClipboardCheck,
   CalendarCheck,
   Activity,
-  Flame
+  Flame,
+  Activity
 } from 'lucide-react'
 import { useState } from 'react'
 import { useSupabase } from '@/components/providers/supabase-provider'
