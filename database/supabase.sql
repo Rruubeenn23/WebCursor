@@ -162,6 +162,57 @@ CREATE TABLE public.workout_exercises (
   reps INTEGER NOT NULL,
   rir INTEGER DEFAULT 2,
   rest_seconds INTEGER DEFAULT 90,
+
+-- Schedule
+CREATE TABLE public.schedule (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  day_of_week INTEGER NOT NULL,
+  workout_id UUID REFERENCES public.workouts(id) ON DELETE CASCADE,
+  meal_template_id UUID REFERENCES public.meal_templates(id) ON DELETE CASCADE,
+
+-- Meal logs
+CREATE TABLE public.logs_meals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  food_id UUID NOT NULL REFERENCES public.foods(id) ON DELETE CASCADE,
+  qty_units NUMERIC NOT NULL,
+  meal_type TEXT NOT NULL,
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Weekly check-ins
+CREATE TABLE public.checkins (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  week_start DATE NOT NULL,
+  weight_kg NUMERIC,
+  waist_cm NUMERIC,
+  sleep_h NUMERIC,
+  hunger_1_5 INT CHECK (hunger_1_5 BETWEEN 1 AND 5),
+  energy_1_5 INT CHECK (energy_1_5 BETWEEN 1 AND 5),
+  stress_1_5 INT CHECK (stress_1_5 BETWEEN 1 AND 5),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, week_start)
+);
+
+-- Workout sessions
+CREATE TABLE public.workout_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+-- Workout exercises
+CREATE TABLE public.workout_exercises (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workout_id UUID NOT NULL REFERENCES public.workouts(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  "order" INTEGER NOT NULL,
+  sets INTEGER NOT NULL,
+  reps INTEGER NOT NULL,
+  rir INTEGER DEFAULT 2,
+  rest_seconds INTEGER DEFAULT 90,
 );
 
 -- Food favourites
@@ -260,6 +311,18 @@ CREATE TABLE public.session_sets (
   tonnage_kg NUMERIC GENERATED ALWAYS AS ((COALESCE(weight_kg,0) * COALESCE(reps,0))::NUMERIC) STORED,
   est_1rm_kg NUMERIC GENERATED ALWAYS AS (estimate_1rm(weight_kg, reps)) STORED,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Exercise personal records
+CREATE TABLE public.exercise_prs (
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  exercise_id UUID NOT NULL REFERENCES public.exercises(id) ON DELETE CASCADE,
+  pr_type TEXT NOT NULL,
+  value_numeric NUMERIC NOT NULL,
+  session_id UUID REFERENCES public.workout_sessions(id),
+  session_set_id UUID REFERENCES public.session_sets(id),
+  achieved_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, exercise_id, pr_type)
 );
 
 -- Workout sessions
@@ -420,7 +483,6 @@ CREATE TRIGGER trg_session_sets_updated BEFORE UPDATE ON public.session_sets
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
-
 
 -- Trigger to maintain food favourites
 CREATE OR REPLACE FUNCTION public.tg_upsert_food_favorite()

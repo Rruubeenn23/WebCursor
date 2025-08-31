@@ -1,4 +1,12 @@
 import '@testing-library/jest-dom'
+import { fetch, Request, Response, Headers } from 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// Explicitly assign them to the Node.js global scope so modules can use them
+global.fetch = fetch
+global.Request = Request
+global.Response = Response
+global.Headers = Headers
 import 'whatwg-fetch'
 
 // Ensure fetch and related classes are available in the test environment
