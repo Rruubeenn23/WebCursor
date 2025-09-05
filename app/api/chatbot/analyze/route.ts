@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
+import { callN8NWebhook } from '@/lib/utils/n8n'
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,25 +20,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Message is required' }, { status: 400 })
     }
 
-    // Aquí normalmente llamarías a un webhook de n8n o a una API de IA
-    // Por ahora, simularemos el análisis con lógica básica
-    const analysis = analyzeFoodMessage(message)
+    // Call n8n webhook for food analysis
+    const data = await callN8NWebhook('chatbotAnalyze', {
+      message,
+      userId: user.id
+    });
 
-    if (analysis) {
-      return NextResponse.json({
-        success: true,
-        response: analysis.response,
-        macros: analysis.macros,
-        foodName: analysis.foodName,
-        qty: analysis.qty,
-        suggestedFood: analysis.suggestedFood
-      })
-    } else {
-      return NextResponse.json({
-        success: false,
-        response: 'No pude analizar esa comida. ¿Podrías ser más específico?'
-      })
-    }
+    return NextResponse.json(data);
 
   } catch (error: any) {
     console.error('Error in chatbot analyze:', error)
