@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-import type { Database } from '@/types/database'
+import type { Database } from '@/types/database.types'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 interface Template {

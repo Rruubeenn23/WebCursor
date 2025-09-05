@@ -14,6 +14,13 @@ type MealPlanItem = Database['public']['Tables']['day_plan_items']['Row'] & {
 export class MealPlanService {
   private supabase: SupabaseClient<Database>;
 
+  /**
+   * Get the Supabase client instance
+   */
+  get client() {
+    return this.supabase;
+  }
+
   constructor(supabase: SupabaseClient<Database>) {
     this.supabase = supabase;
   }

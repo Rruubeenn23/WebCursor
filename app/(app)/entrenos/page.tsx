@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dumbbell, Plus, Edit, Trash2, Timer, Target } from 'lucide-react'
-import type { Database } from '@/types/database'
+import type { Database } from '@/types/database.types'
 
 type Exercise = Database['public']['Tables']['exercises']['Row']
 type WorkoutExercise = Database['public']['Tables']['workout_exercises']['Row'] & {

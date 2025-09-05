@@ -1,6 +1,6 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { Database } from '@/types/database';
+import { Database } from '@/types/database.types';
 import { MealPlanService } from '@/lib/services/mealPlanService';
 
 export function createClient() {
@@ -17,14 +17,11 @@ export async function getMealPlanService() {
   const service = createMealPlanService();
   
   // Verify user is authenticated
-  const { data: { user }, error } = await service.supabase.auth.getUser();
+  const { data: { user }, error } = await service.client.auth.getUser();
   
   if (error || !user) {
     throw new Error('Unauthorized');
   }
   
-  return {
-    service,
-    userId: user.id,
-  };
+  return service;
 }
