@@ -29,7 +29,7 @@ export default function ComidasPage() {
   const [editingTemplate, setEditingTemplate] = useState<MealTemplate | null>(null)
   const [templateData, setTemplateData] = useState({
     name: '',
-    description: '',
+    // description: '',
     items: [] as Array<{
       food_id: string
       qty_units: number
@@ -125,7 +125,7 @@ export default function ComidasPage() {
       const newTemplate: Database['public']['Tables']['meal_templates']['Insert'] = {
         user_id: user.id,
         name: templateData.name,
-        description: templateData.description || null
+        // description: templateData.description || null
       }
 
       // Crear template
@@ -154,7 +154,7 @@ export default function ComidasPage() {
         if (itemsError) throw itemsError
       }
 
-      setTemplateData({ name: '', description: '', items: [] })
+      setTemplateData({ name: '', items: [] })
       setShowCreateTemplate(false)
       loadData()
     } catch (error) {
@@ -168,7 +168,7 @@ export default function ComidasPage() {
     try {
       const updateData: Database['public']['Tables']['meal_templates']['Update'] = {
         name: templateData.name,
-        description: templateData.description || null
+        // description: templateData.description || null
       }
 
       // Actualizar template
@@ -202,7 +202,7 @@ export default function ComidasPage() {
         if (itemsError) throw itemsError
       }
 
-      setTemplateData({ name: '', description: '', items: [] })
+      setTemplateData({ name: '', items: [] })
       setEditingTemplate(null)
       loadData()
     } catch (error) {
@@ -276,8 +276,8 @@ export default function ComidasPage() {
   }
 
   const filteredTemplates = templates.filter(template =>
-    template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    template.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    template.name.toLowerCase().includes(searchTerm.toLowerCase())
+    // template.description?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -335,7 +335,7 @@ export default function ComidasPage() {
                       setEditingTemplate(template)
                       setTemplateData({
                         name: template.name,
-                        description: template.description || '',
+                        // description: template.description || '',
                         items: template.items.map(item => ({
                           food_id: item.food_id,
                           qty_units: item.qty_units,
@@ -356,9 +356,9 @@ export default function ComidasPage() {
                   </Button>
                 </div>
               </div>
-              {template.description && (
+              {/* {template.description && (
                 <p className="text-sm text-muted-foreground">{template.description}</p>
-              )}
+              )} */}
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
@@ -404,14 +404,14 @@ export default function ComidasPage() {
                 />
               </div>
 
-              <div className="space-y-2">
+              {/* <div className="space-y-2">
                 <label className="text-sm font-medium">Descripción (opcional)</label>
                 <Input
                   placeholder="Ej: Desayuno alto en proteínas para días de entrenamiento"
                   value={templateData.description}
                   onChange={(e) => setTemplateData(prev => ({ ...prev, description: e.target.value }))}
                 />
-              </div>
+              </div> */}
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -479,7 +479,7 @@ export default function ComidasPage() {
                   onClick={() => {
                     setShowCreateTemplate(false)
                     setEditingTemplate(null)
-                    setTemplateData({ name: '', description: '', items: [] })
+                    setTemplateData({ name: '', items: [] })
                   }}
                 >
                   Cancelar
