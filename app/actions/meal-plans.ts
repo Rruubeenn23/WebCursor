@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { Database } from '@/types/database.types';
 import { revalidatePath } from 'next/cache';
 
 export async function generateWeeklyPlan() {
@@ -66,7 +67,8 @@ export async function markMealAsDone(mealId: string) {
     }
 
     // Call the meal plan service
-    const mealPlanService = new (await import('@/lib/services/mealPlanService')).default(supabase);
+    const { MealPlanService } = await import('@/lib/services/mealPlanService');
+    const mealPlanService = new MealPlanService(supabase);
     await mealPlanService.markMealAsDone(mealId, user.id);
     
     // Revalidate the plans and dashboard pages
