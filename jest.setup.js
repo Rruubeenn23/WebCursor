@@ -1,4 +1,19 @@
 import '@testing-library/jest-dom'
+import { fetch as whatwgFetch, Request as WhatwgRequest, Headers as WhatwgHeaders } from 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// Only polyfill if the global objects are missing
+if (!global.fetch) global.fetch = whatwgFetch
+if (!global.Request) global.Request = WhatwgRequest
+if (!global.Headers) global.Headers = WhatwgHeaders
+import { fetch, Request, Response, Headers } from 'whatwg-fetch'
+
+// Ensure fetch and related classes are available in the test environment
+// Explicitly assign them to the Node.js global scope so modules can use them
+global.fetch = fetch
+global.Request = Request
+global.Response = Response
+global.Headers = Headers
 import 'whatwg-fetch'
 
 // Ensure fetch and related classes are available in the test environment

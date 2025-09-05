@@ -5,18 +5,20 @@ import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { 
-  Calendar, 
-  Home, 
-  Settings, 
-  Utensils, 
-  Dumbbell, 
-  Menu, 
+  Calendar,
+  Home,
+  Settings,
+  Utensils,
+  Dumbbell,
+  Menu,
   X,
   LogOut,
   Bot,
   ClipboardCheck,
   CalendarCheck,
-  Activity
+  Activity,
+  Flame,
+  Droplet
 } from 'lucide-react'
 import { useState } from 'react'
 import { useSupabase } from '@/components/providers/supabase-provider'
@@ -29,6 +31,8 @@ const navigation = [
   { name: 'Check-ins', href: '/check-ins', icon: ClipboardCheck },
   { name: 'Historial', href: '/historial', icon: CalendarCheck },
   { name: 'IMC', href: '/imc', icon: Activity },
+  { name: 'BMR', href: '/bmr', icon: Flame },
+  { name: 'Agua', href: '/agua', icon: Droplet },
   { name: 'Chatbot', href: '/chatbot', icon: Bot },
   { name: 'Ajustes', href: '/ajustes', icon: Settings },
 ]

@@ -13,6 +13,8 @@ Tu hub personal para entrenamiento, nutrición y automatizaciones. Una aplicaci�
 - **Chatbot de Nutrición**: Análisis de macros mediante IA para comidas no predefinidas
 - **Seguimiento de Macros**: Cálculo automático de calorías, proteínas, carbohidratos y grasas
 - **Calculadora de IMC**: Evalúa tu índice de masa corporal y su categoría
+- **Calculadora de BMR/TDEE**: Estima tu metabolismo basal y gasto energético diario
+- **Registro de Agua**: Controla tu hidratación diaria con objetivo personalizable
 - **Ajustes Personalizados**: Metas nutricionales y configuración de zona horaria
 
 ### 🤖 Automatizaciones (n8n)
