@@ -7,12 +7,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import type { Tables, TablesInsert } from '@/types/database'
+import type { Database } from '@/types/database'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
-type WaterLog = Tables<'water_logs'>
+type WaterLog = Database['public']['Tables']['water_logs']['Row']
+type WaterLogInsert = Database['public']['Tables']['water_logs']['Insert']
 
 export default function AguaPage() {
-  const { user, supabase } = useSupabase()
+  const { user } = useSupabase()
+  const supabase = createClientComponentClient<Database>()
   const [amount, setAmount] = useState('')
   const [logs, setLogs] = useState<WaterLog[]>([])
 
@@ -25,14 +28,20 @@ export default function AguaPage() {
     const fetchLogs = async () => {
       const startOfDay = new Date()
       startOfDay.setHours(0, 0, 0, 0)
-      const { data } = await supabase
+      
+      const { data, error } = await supabase
         .from('water_logs')
         .select('id, ml, logged_at')
         .eq('user_id', user.id)
         .gte('logged_at', startOfDay.toISOString())
         .order('logged_at', { ascending: true })
 
-      setLogs((data as WaterLog[]) ?? [])
+      if (error) {
+        console.error('Error fetching water logs:', error)
+        return
+      }
+
+      setLogs(data as WaterLog[])
     }
 
     fetchLogs()
@@ -42,18 +51,36 @@ export default function AguaPage() {
     const ml = parseInt(amount, 10)
     if (!ml || !user) return
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('water_logs')
-      .insert({ user_id: user.id, ml } as TablesInsert<'water_logs'>)
+      .insert({
+        user_id: user.id,
+        ml,
+        logged_at: new Date().toISOString()
+      } as never)
       .select('id, ml, logged_at')
       .single()
+
+    if (error) {
+      console.error('Error adding water log:', error)
+      return
+    }
 
     if (data) setLogs((prev) => [...prev, data as WaterLog])
     setAmount('')
   }
 
   const removeLog = async (id: string) => {
-    await supabase.from('water_logs').delete().eq('id', id)
+    const { error } = await supabase
+      .from('water_logs')
+      .delete()
+      .eq('id', id)
+      
+    if (error) {
+      console.error('Error removing water log:', error)
+      return
+    }
+    
     setLogs((prev) => prev.filter((l) => l.id !== id))
   }
 
