@@ -1,27 +1,8 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
-import { Database } from '@/types/database.types';
-import { MealPlanService } from '@/lib/services/mealPlanService';
+import { cookies } from 'next/headers'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import type { Database } from '@/types/database.types'
 
-export function createClient() {
-  const cookieStore = cookies();
-  return createServerComponentClient<Database>({ cookies: () => cookieStore });
-}
-
-export function createMealPlanService() {
-  const supabase = createClient();
-  return new MealPlanService(supabase);
-}
-
-export async function getMealPlanService() {
-  const service = createMealPlanService();
-  
-  // Verify user is authenticated
-  const { data: { user }, error } = await service.client.auth.getUser();
-  
-  if (error || !user) {
-    throw new Error('Unauthorized');
-  }
-  
-  return service;
+export function createServerSupabase() {
+  const cookieStore = cookies()
+  return createServerComponentClient<Database>({ cookies: () => cookieStore })
 }

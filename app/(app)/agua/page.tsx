@@ -1,134 +1,54 @@
-'use client'
+import { createServerSupabase } from '@/lib/supabase/server'
+import { WaterQuickAdd } from '../today/water-quick-add'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { TZ } from '@/lib/utils'
 
-import { useEffect, useState } from 'react'
-import { format } from 'date-fns'
-import { useSupabase } from '@/components/providers/supabase-provider'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import type { Database } from '@/types/database.types'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-
-type WaterLog = Database['public']['Tables']['water_logs']['Row']
-type WaterLogInsert = Database['public']['Tables']['water_logs']['Insert']
-
-export default function AguaPage() {
-  const { user } = useSupabase()
-  const supabase = createClientComponentClient<Database>()
-  const [amount, setAmount] = useState('')
-  const [logs, setLogs] = useState<WaterLog[]>([])
-
-  const dailyTotal = logs.reduce((acc, l) => acc + l.ml, 0)
-  const goal = 2000
-
-  useEffect(() => {
-    if (!user) return
-
-    const fetchLogs = async () => {
-      const startOfDay = new Date()
-      startOfDay.setHours(0, 0, 0, 0)
-      
-      const { data, error } = await supabase
-        .from('water_logs')
-        .select('id, ml, logged_at')
-        .eq('user_id', user.id)
-        .gte('logged_at', startOfDay.toISOString())
-        .order('logged_at', { ascending: true })
-
-      if (error) {
-        console.error('Error fetching water logs:', error)
-        return
-      }
-
-      setLogs(data as WaterLog[])
-    }
-
-    fetchLogs()
-  }, [supabase, user])
-
-  const addLog = async () => {
-    const ml = parseInt(amount, 10)
-    if (!ml || !user) return
-
-    const { data, error } = await supabase
-      .from('water_logs')
-      .insert({
-        user_id: user.id,
-        ml,
-        logged_at: new Date().toISOString()
-      } as never)
-      .select('id, ml, logged_at')
-      .single()
-
-    if (error) {
-      console.error('Error adding water log:', error)
-      return
-    }
-
-    if (data) setLogs((prev) => [...prev, data as WaterLog])
-    setAmount('')
-  }
-
-  const removeLog = async (id: string) => {
-    const { error } = await supabase
-      .from('water_logs')
-      .delete()
-      .eq('id', id)
-      
-    if (error) {
-      console.error('Error removing water log:', error)
-      return
-    }
-    
-    setLogs((prev) => prev.filter((l) => l.id !== id))
-  }
-
-  return (
-    <Card className="max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Registro de Agua</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Input
-            type="number"
-            placeholder="ml"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-          />
-          <Button onClick={addLog} disabled={!amount}>
-            Añadir
-          </Button>
-        </div>
-        <div>
-          <p className="text-sm mb-2">
-            Total diario: {dailyTotal} / {goal} ml
-          </p>
-          <Progress value={Math.min(100, (dailyTotal / goal) * 100)} />
-        </div>
-
-        {logs.length > 0 && (
-          <ul className="space-y-2 max-h-48 overflow-y-auto">
-            {logs.map((log) => (
-              <li key={log.id} className="flex items-center justify-between text-sm">
-                <span>
-                  {format(new Date(log.logged_at), 'HH:mm')} - {log.ml} ml
-                </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => removeLog(log.id)}
-                  aria-label="Eliminar registro"
-                >
-                  ✕
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  )
+function todayWindow(tz = TZ) {
+  const now = new Date()
+  const y = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric' }).format(now)
+  const m = new Intl.DateTimeFormat('en-CA', { timeZone: tz, month: '2-digit' }).format(now)
+  const d = new Intl.DateTimeFormat('en-CA', { timeZone: tz, day: '2-digit' }).format(now)
+  const start = new Date(`${y}-${m}-${d}T00:00:00.000Z`)
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
+  return { startISO: start.toISOString(), endISO: end.toISOString(), label: `${y}-${m}-${d}` }
 }
 
+export default async function AguaPage() {
+  const supabase = createServerSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { startISO, endISO, label } = todayWindow(TZ)
+
+  const { data } = await supabase
+    .from('water_logs')
+    .select('amount_ml, created_at')
+    .eq('user_id', user.id)
+    .gte('created_at', startISO)
+    .lt('created_at', endISO)
+    .returns<{ amount_ml: number; created_at: string }[]>()
+
+  const total = (data ?? []).reduce((s, r) => s + (r?.amount_ml ?? 0), 0)
+
+  return (
+    <div className="mx-auto max-w-2xl p-4 space-y-6">
+      <h1 className="text-2xl font-semibold">Agua</h1>
+      <Card>
+        <CardHeader>
+          <CardTitle>Hoy ({label})</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>Total: <span className="font-semibold">{total} ml</span></div>
+          <WaterQuickAdd />
+          <div className="pt-2">
+            <ul className="space-y-1">
+              {(data ?? []).map((r, i) => (
+                <li key={i} className="text-sm text-muted-foreground">{r.amount_ml} ml</li>
+              ))}
+            </ul>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

@@ -1,115 +1,41 @@
 {
-  "name": "Chatbot - Análisis de Macros",
+  "name": "Chatbot Analyze Nutrition",
   "nodes": [
     {
+      "id": "webhook",
+      "name": "Incoming Prompt",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [100, 100],
       "parameters": {
         "httpMethod": "POST",
         "path": "chatbot-analyze",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "webhook",
-      "name": "Webhook",
-      "type": "n8n-nodes-base.webhook",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      }
+    },
+    {
+      "id": "fetch-data",
+      "name": "Fetch Weekly Summary",
+      "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 1,
-      "position": [240, 300],
-      "webhookId": "chatbot-analyze"
+      "position": [320, 100],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL + '/api/summary/weekly' }}",
+        "options": { "retryOnFail": true, "maxRetries": 3 }
+      }
     },
     {
-      "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{ $json.message }}",
-              "operation": "notEmpty"
-            }
-          ]
-        }
-      },
-      "id": "validate-input",
-      "name": "Validar Input",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [460, 300]
-    },
-    {
-      "parameters": {
-        "jsCode": "// Analizar el mensaje del usuario\nconst message = $input.first().json.message.toLowerCase();\n\n// Base de datos de alimentos (en producción, esto vendría de una API externa)\nconst foodDatabase = {\n  'manzana': {\n    name: 'Manzana',\n    kcal: 52,\n    protein_g: 0.3,\n    carbs_g: 14,\n    fat_g: 0.2,\n    unit: '100g',\n    grams_per_unit: 100\n  },\n  'pollo': {\n    name: 'Pollo pechuga',\n    kcal: 165,\n    protein_g: 31,\n    carbs_g: 0,\n    fat_g: 3.6,\n    unit: '100g',\n    grams_per_unit: 100\n  },\n  'arroz': {\n    name: 'Arroz blanco',\n    kcal: 130,\n    protein_g: 2.7,\n    carbs_g: 28,\n    fat_g: 0.3,\n    unit: '100g',\n    grams_per_unit: 100\n  },\n  'café': {\n    name: 'Café con leche',\n    kcal: 42,\n    protein_g: 3.4,\n    carbs_g: 4.8,\n    fat_g: 1.2,\n    unit: '250ml',\n    grams_per_unit: 250\n  },\n  'tostada': {\n    name: 'Tostada con mantequilla',\n    kcal: 120,\n    protein_g: 3.5,\n    carbs_g: 18,\n    fat_g: 4.5,\n    unit: '1 unidad',\n    grams_per_unit: 50\n  },\n  'batido': {\n    name: 'Batido de proteínas',\n    kcal: 120,\n    protein_g: 25,\n    carbs_g: 3,\n    fat_g: 1.5,\n    unit: '30g',\n    grams_per_unit: 30\n  }\n};\n\n// Buscar alimentos en el mensaje\nlet foundFood = null;\nlet qty = 100;\n\n// Buscar patrones de cantidad (ej: \"150g\", \"200 gramos\")\nconst qtyMatch = message.match(/(\\d+)\\s*(g|gramos?|gr)/i);\nif (qtyMatch) {\n  qty = parseInt(qtyMatch[1]);\n}\n\n// Buscar alimentos conocidos\nfor (const [keyword, food] of Object.entries(foodDatabase)) {\n  if (message.includes(keyword)) {\n    foundFood = food;\n    break;\n  }\n}\n\nif (foundFood) {\n  // Calcular macros para la cantidad específica\n  const multiplier = qty / foundFood.grams_per_unit;\n  const macros = {\n    kcal: Math.round(foundFood.kcal * multiplier),\n    protein: Math.round(foundFood.protein_g * multiplier * 10) / 10,\n    carbs: Math.round(foundFood.carbs_g * multiplier * 10) / 10,\n    fat: Math.round(foundFood.fat_g * multiplier * 10) / 10\n  };\n  \n  return {\n    success: true,\n    response: `He analizado tu comida. ${foundFood.name} (${qty}g) contiene aproximadamente ${macros.kcal} calorías, ${macros.protein}g de proteína, ${macros.carbs}g de carbohidratos y ${macros.fat}g de grasas.`,\n    macros,\n    foodName: foundFood.name,\n    qty,\n    suggestedFood: {\n      ...foundFood,\n      id: `suggested_${Date.now()}`\n    }\n  };\n} else {\n  // Si no encuentra un alimento específico, intentar extraer información general\n  const generalFoods = Object.keys(foodDatabase);\n  for (const food of generalFoods) {\n    if (message.includes(food)) {\n      return {\n        success: true,\n        response: `Veo que mencionas \"${food}\". Para un análisis más preciso, por favor especifica la cantidad. Por ejemplo: \"Comí ${food} de 150g\"`,\n        macros: null,\n        foodName: food,\n        qty: null,\n        suggestedFood: null\n      };\n    }\n  }\n  \n  return {\n    success: false,\n    response: 'No pude analizar esa comida. ¿Podrías ser más específico? Por ejemplo: \"Comí una manzana de 150g\" o \"Tomé un café con leche\"'\n  };\n}"
-      },
-      "id": "analyze-food",
-      "name": "Analizar Comida",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [680, 300]
-    },
-    {
-      "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ $json }}",
-        "options": {}
-      },
-      "id": "success-response",
-      "name": "Respuesta Exitosa",
+      "id": "respond",
+      "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [900, 300]
-    },
-    {
+      "position": [540, 100],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={\n  \"success\": false,\n  \"error\": \"Mensaje requerido\"\n}",
-        "options": {}
-      },
-      "id": "error-response",
-      "name": "Respuesta de Error",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [680, 500]
+        "responseBody": "={ \"message\": \"Summary fetched\", \"data\": $json }"
+      }
     }
   ],
-  "connections": {
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Validar Input",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Validar Input": {
-      "main": [
-        [
-          {
-            "node": "Analizar Comida",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Respuesta de Error",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Analizar Comida": {
-      "main": [
-        [
-          {
-            "node": "Respuesta Exitosa",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    }
-  },
-  "active": false,
-  "settings": {},
-  "versionId": "1"
+  "connections": { "fetch-data": { "main": [[{ "node": "Respond", "type": "main", "index": 0 }]] } }
 }

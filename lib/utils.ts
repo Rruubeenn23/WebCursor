@@ -1,5 +1,34 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { DateTime } from 'luxon'
+
+export const TZ = 'Europe/Madrid'
+
+export function todayISO(tz: string = TZ) {
+  return DateTime.now().setZone(tz).toISODate()
+}
+
+export function toUTC(dateISO: string, tz: string = TZ) {
+  return DateTime.fromISO(dateISO, { zone: tz }).toUTC().toISO()
+}
+
+export function fromUTC(dateTimeISO: string, tz: string = TZ) {
+  return DateTime.fromISO(dateTimeISO, { zone: 'utc' }).setZone(tz).toISO()
+}
+
+export function startOfWeekISO(dateISO?: string, tz: string = TZ) {
+  const d = dateISO ? DateTime.fromISO(dateISO, { zone: tz }) : DateTime.now().setZone(tz)
+  return d.startOf('week').toISODate()
+}
+
+export function endOfWeekISO(dateISO?: string, tz: string = TZ) {
+  const d = dateISO ? DateTime.fromISO(dateISO, { zone: tz }) : DateTime.now().setZone(tz)
+  return d.endOf('week').toISODate()
+}
+
+export function assertNever(_: never): never {
+  throw new Error('Unexpected object')
+}
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
