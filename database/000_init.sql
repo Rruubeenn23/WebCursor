@@ -6,32 +6,36 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Helper: updated_at
-DO $$
+-- =====================================================
+-- Helper: updated_at trigger function (create unconditionally)
+-- =====================================================
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $func$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'update_updated_at_column') THEN
-    CREATE OR REPLACE FUNCTION update_updated_at_column()
-    RETURNS TRIGGER AS $func$
-    BEGIN
-      NEW.updated_at = NOW();
-      RETURN NEW;
-    END;
-    $func$ LANGUAGE plpgsql;
-  END IF;
-END$$;
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$func$;
 
--- Helper: estimate_1rm (example util)
+-- =====================================================
+-- Helper: estimate_1rm (example util) -- uses distinct dollar-quote
+-- =====================================================
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'estimate_1rm') THEN
-    CREATE OR REPLACE FUNCTION estimate_1rm(weight_kg NUMERIC, reps INT)
-    RETURNS NUMERIC AS $$
+    CREATE OR REPLACE FUNCTION public.estimate_1rm(weight_kg NUMERIC, reps INT)
+    RETURNS NUMERIC
+    LANGUAGE sql
+    IMMUTABLE
+    AS $e1rm$
       SELECT CASE
                WHEN weight_kg IS NULL OR reps IS NULL THEN NULL
                WHEN reps = 1 THEN weight_kg
                ELSE ROUND(weight_kg * (1 + reps::NUMERIC / 30), 2)
-             END;
-    $$ LANGUAGE sql IMMUTABLE;
+             END
+    $e1rm$;
   END IF;
 END$$;
 
@@ -169,13 +173,13 @@ CREATE TABLE IF NOT EXISTS public.workout_exercises (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- water_logs
+-- water_logs (aligned with app code: amount_ml + created_at)
 CREATE TABLE IF NOT EXISTS public.water_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  date DATE NOT NULL,
-  ml INTEGER NOT NULL CHECK (ml > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  amount_ml INTEGER NOT NULL CHECK (amount_ml > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- schedule (optional planning)
@@ -202,100 +206,107 @@ CREATE TABLE IF NOT EXISTS public.checkins (
   stress_1_5 INTEGER CHECK (stress_1_5 BETWEEN 1 AND 5),
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, week_start)
 );
 
 -- =========================
--- Triggers
+-- Triggers (schema-qualified function)
 -- =========================
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_users_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_users_updated_at') THEN
     CREATE TRIGGER tg_users_updated_at BEFORE UPDATE ON public.users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_goals_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_goals_updated_at') THEN
     CREATE TRIGGER tg_goals_updated_at BEFORE UPDATE ON public.goals
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_foods_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_foods_updated_at') THEN
     CREATE TRIGGER tg_foods_updated_at BEFORE UPDATE ON public.foods
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_meal_templates_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_meal_templates_updated_at') THEN
     CREATE TRIGGER tg_meal_templates_updated_at BEFORE UPDATE ON public.meal_templates
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_meal_template_items_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_meal_template_items_updated_at') THEN
     CREATE TRIGGER tg_meal_template_items_updated_at BEFORE UPDATE ON public.meal_template_items
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_day_plans_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_day_plans_updated_at') THEN
     CREATE TRIGGER tg_day_plans_updated_at BEFORE UPDATE ON public.day_plans
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_day_plan_items_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_day_plan_items_updated_at') THEN
     CREATE TRIGGER tg_day_plan_items_updated_at BEFORE UPDATE ON public.day_plan_items
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_exercises_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_exercises_updated_at') THEN
     CREATE TRIGGER tg_exercises_updated_at BEFORE UPDATE ON public.exercises
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_workouts_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_workouts_updated_at') THEN
     CREATE TRIGGER tg_workouts_updated_at BEFORE UPDATE ON public.workouts
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'tg_workout_exercises_updated_at';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_workout_exercises_updated_at') THEN
     CREATE TRIGGER tg_workout_exercises_updated_at BEFORE UPDATE ON public.workout_exercises
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_water_logs_updated_at') THEN
+    CREATE TRIGGER tg_water_logs_updated_at BEFORE UPDATE ON public.water_logs
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+  END IF;
+END$$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'tg_schedule_updated_at') THEN
+    CREATE TRIGGER tg_schedule_updated_at BEFORE UPDATE ON public.schedule
+    FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
   END IF;
 END$$;
 
@@ -307,20 +318,19 @@ DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'handle_new_user') THEN
     CREATE OR REPLACE FUNCTION public.handle_new_user()
-    RETURNS TRIGGER AS $$
+    RETURNS TRIGGER AS $h$
     BEGIN
       INSERT INTO public.users (id, email) VALUES (NEW.id, NEW.email)
       ON CONFLICT (id) DO NOTHING;
       RETURN NEW;
     END;
-    $$ LANGUAGE plpgsql SECURITY DEFINER;
+    $h$ LANGUAGE plpgsql SECURITY DEFINER;
   END IF;
 END$$;
 
 DO $$
 BEGIN
-  PERFORM 1 FROM pg_trigger WHERE tgname = 'on_auth_user_created';
-  IF NOT FOUND THEN
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'on_auth_user_created') THEN
     CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
@@ -339,5 +349,5 @@ CREATE INDEX IF NOT EXISTS idx_day_plan_items_user_date ON public.day_plan_items
 CREATE INDEX IF NOT EXISTS idx_logs_meals_user_date ON public.logs_meals (user_id, date);
 CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON public.workouts (user_id, date);
 CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout ON public.workout_exercises (workout_id);
-CREATE INDEX IF NOT EXISTS idx_water_logs_user_date ON public.water_logs (user_id, date);
+CREATE INDEX IF NOT EXISTS idx_water_logs_user_created ON public.water_logs (user_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_schedule_user_date ON public.schedule (user_id, date);
