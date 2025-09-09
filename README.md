@@ -118,7 +118,7 @@ TELEGRAM_CHAT_ID=tu_chat_id
 # Ejecutar en modo desarrollo
 npm run dev
 
-# Abrir http://localhost:3000
+# Abrir http://https://web-cursor-five.vercel.app/
 ```
 
 ### 5. Configurar n8n (Opcional)

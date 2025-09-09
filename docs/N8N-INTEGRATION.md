@@ -90,7 +90,7 @@ N8N_BASE_URL=http://localhost:5678  # URL of your n8n instance
 N8N_API_KEY=your_n8n_api_key        # API key for n8n authentication
 
 # Application Configuration
-NEXT_PUBLIC_APP_URL=http://localhost:3000  # Your Next.js app URL
+NEXT_PUBLIC_APP_URL=http://https://web-cursor-five.vercel.app/  # Your Next.js app URL
 API_TOKEN=your_api_token_for_n8n
 DEFAULT_TEMPLATE_ID=your_default_meal_template_id
 
