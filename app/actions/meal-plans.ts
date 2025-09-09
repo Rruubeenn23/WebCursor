@@ -21,43 +21,61 @@ export async function generateWeeklyPlan() {
   const svc = getMealPlanService(supabase)
   await svc.generateWeek(user.id)
 
-  // Revalidate any pages that show plans
-  revalidatePath('/(app)/plan')
-  revalidatePath('/(app)/today')
+  // Revalidate URL paths (not group folder names)
+  revalidatePath('/plans')
+  revalidatePath('/today')
 }
 
 /**
  * Mark a planned meal item as done/undone.
- * Expects the id of a row in public.day_plan_items.
+ * Accepts either a string id or an object { id, done? }.
+ * Returns a structured result for client ergonomics.
  */
 const markMealAsDoneSchema = z.object({
-  id: z.string().min(1), // use .uuid() if your ids are UUIDs
+  id: z.string().min(1), // use z.string().uuid() if ids are UUIDs
   done: z.boolean().optional().default(true),
 })
 
-export async function markMealAsDone(input: { id: string; done?: boolean }) {
-  const parsed = markMealAsDoneSchema.safeParse(input)
+export async function markMealAsDone(
+  input: { id: string; done?: boolean } | string
+): Promise<{ success: boolean; error?: string }> {
+  // Normalize input
+  const normalized =
+    typeof input === 'string' ? { id: input, done: true } : input
+
+  const parsed = markMealAsDoneSchema.safeParse(normalized)
   if (!parsed.success) {
-    throw new Error(parsed.error.errors.map(e => e.message).join(', '))
+    return {
+      success: false,
+      error: parsed.error.errors.map(e => e.message).join(', '),
+    }
   }
 
-  const supabase = createServerSupabase()
-  const {
-    data: { user },
-    error: authErr,
-  } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  if (!user) throw new Error('Unauthorized')
+  try {
+    const supabase = createServerSupabase()
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser()
+    if (authErr) throw authErr
+    if (!user) throw new Error('Unauthorized')
 
-  const { error } = await supabase
-    .from('day_plan_items')
-    .update({ done: parsed.data.done })
-    .eq('id', parsed.data.id)
-    .eq('user_id', user.id)
+    const { error } = await supabase
+      .from('day_plan_items')
+      .update({ done: parsed.data.done })
+      .eq('id', parsed.data.id)
+      .eq('user_id', user.id)
 
-  if (error) throw error
+    if (error) {
+      return { success: false, error: error.message }
+    }
 
-  // Revalidate pages that render meals / plans
-  revalidatePath('/(app)/today')
-  revalidatePath('/(app)/plan')
+    // Revalidate pages that render meals / plans
+    revalidatePath('/today')
+    revalidatePath('/plans')
+
+    return { success: true }
+  } catch (e: any) {
+    return { success: false, error: e?.message ?? 'Unknown error' }
+  }
 }
