@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Utensils, Plus, Edit, Trash2, Search, Clock } from 'lucide-react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import type { Database } from '@/types/supabase'
+import type { Database } from '@/types/database.types'
 
 type Food = Database['public']['Tables']['foods']['Row']
 type MealTemplate = Database['public']['Tables']['meal_templates']['Row'] & {

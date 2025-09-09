@@ -186,6 +186,29 @@ export interface Database {
           updated_at?: string
         }
       }
+      water_logs: {
+        Row: {
+          id: string
+          user_id: string
+          amount_ml: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount_ml: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount_ml?: number
+          created_at?: string
+          updated_at?: string
+        }
+      },
       day_plan_items: {
         Row: {
           id: string
