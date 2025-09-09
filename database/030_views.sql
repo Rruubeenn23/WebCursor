@@ -4,34 +4,67 @@
 -- =========================
 
 -- v_daily_totals
--- Per-user, per-day totals across meals, water, and workouts.
--- - Meals: sums macros from logs_meals joined to foods.
--- - Water: sums amount_ml by date(created_at).
--- - Workouts: counts workouts per day.
--- The view exposes (user_id, day) so client can filter:
---   .../v_daily_totals?user_id=eq.<uuid>&day=gte.<YYYY-MM-DD>&day=lte.<YYYY-MM-DD>
+-- Per-user, per-day totals across meals (from day_plan_items), water, and workouts.
+-- Meals include:
+--   - Planned food items with `done = true` joined to foods
+--   - Quick entries with `entry_type = 'quick'` and `macros_override` JSON
+-- Water sums water_logs.amount_ml grouped by date(created_at)
+-- Workouts counts workouts per day using COALESCE(workouts.date, date(created_at))
 CREATE OR REPLACE VIEW public.v_daily_totals AS
 WITH days AS (
-  -- any day that appears in any contributing table for that user
-  SELECT user_id, date AS day FROM public.logs_meals
+  SELECT user_id, date AS day FROM public.day_plans
+  UNION
+  SELECT user_id, COALESCE(date, created_at::date) AS day FROM public.workouts
   UNION
   SELECT user_id, date(created_at) AS day FROM public.water_logs
   UNION
-  SELECT user_id, date AS day FROM public.workouts
-  UNION
-  SELECT user_id, date AS day FROM public.day_plans
+  SELECT dpi.user_id, dp.date AS day
+  FROM public.day_plan_items dpi
+  JOIN public.day_plans dp ON dp.id = dpi.day_plan_id
+),
+-- items that reference a concrete food and are marked done
+meal_food_items AS (
+  SELECT
+    dpi.user_id,
+    dp.date AS day,
+    SUM((f.kcal * dpi.qty_units))::int            AS kcal_total,
+    SUM((f.protein_g * dpi.qty_units))::int       AS protein_g_total,
+    SUM((f.carbs_g * dpi.qty_units))::int         AS carbs_g_total,
+    SUM((f.fat_g * dpi.qty_units))::int           AS fat_g_total
+  FROM public.day_plan_items dpi
+  JOIN public.day_plans dp ON dp.id = dpi.day_plan_id
+  JOIN public.foods f ON f.id = dpi.food_id
+  WHERE dpi.done IS TRUE
+  GROUP BY dpi.user_id, dp.date
+),
+-- quick entries carrying macros_override JSON (kcal, protein, carbs, fat)
+meal_quick_items AS (
+  SELECT
+    dpi.user_id,
+    dp.date AS day,
+    COALESCE(SUM( (dpi.macros_override->>'kcal')::numeric ), 0)::int            AS kcal_total,
+    COALESCE(SUM( (dpi.macros_override->>'protein')::numeric ), 0)::int         AS protein_g_total,
+    COALESCE(SUM( (dpi.macros_override->>'carbs')::numeric ), 0)::int           AS carbs_g_total,
+    COALESCE(SUM( (dpi.macros_override->>'fat')::numeric ), 0)::int             AS fat_g_total
+  FROM public.day_plan_items dpi
+  JOIN public.day_plans dp ON dp.id = dpi.day_plan_id
+  WHERE dpi.done IS TRUE
+    AND dpi.entry_type = 'quick'
+    AND dpi.macros_override IS NOT NULL
+  GROUP BY dpi.user_id, dp.date
 ),
 meal_totals AS (
-  SELECT
-    lm.user_id,
-    lm.date AS day,
-    COALESCE(SUM(lm.qty_units * f.kcal), 0)::int                 AS kcal_total,
-    COALESCE(SUM(lm.qty_units * f.protein_g), 0)::int            AS protein_g_total,
-    COALESCE(SUM(lm.qty_units * f.carbs_g), 0)::int              AS carbs_g_total,
-    COALESCE(SUM(lm.qty_units * f.fat_g), 0)::int                AS fat_g_total
-  FROM public.logs_meals lm
-  JOIN public.foods f ON f.id = lm.food_id
-  GROUP BY lm.user_id, lm.date
+  SELECT user_id, day,
+         COALESCE(SUM(kcal_total),0)::int AS kcal_total,
+         COALESCE(SUM(protein_g_total),0)::int AS protein_g_total,
+         COALESCE(SUM(carbs_g_total),0)::int AS carbs_g_total,
+         COALESCE(SUM(fat_g_total),0)::int AS fat_g_total
+  FROM (
+    SELECT * FROM meal_food_items
+    UNION ALL
+    SELECT * FROM meal_quick_items
+  ) u
+  GROUP BY user_id, day
 ),
 water_totals AS (
   SELECT
@@ -44,10 +77,10 @@ water_totals AS (
 workout_totals AS (
   SELECT
     user_id,
-    date AS day,
+    COALESCE(date, created_at::date) AS day,
     COUNT(*)::int AS workouts_count
   FROM public.workouts
-  GROUP BY user_id, date
+  GROUP BY user_id, COALESCE(date, created_at::date)
 )
 SELECT
   d.user_id,
@@ -62,7 +95,3 @@ FROM days d
 LEFT JOIN meal_totals   m  ON m.user_id = d.user_id AND m.day  = d.day
 LEFT JOIN water_totals  w  ON w.user_id = d.user_id AND w.day  = d.day
 LEFT JOIN workout_totals wo ON wo.user_id = d.user_id AND wo.day = d.day;
-
--- Helpful (non-unique) index for common filters via RLS planner
--- (On views, you can't index directly; index base tables are already added in 000_init.sql.)
--- Nothing to add here.
