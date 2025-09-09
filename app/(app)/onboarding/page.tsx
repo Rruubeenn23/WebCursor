@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { computeAndSaveTargets } from '@/lib/actions/goals'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label'
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const next = searchParams.get('next') || '/today'
 
   // Controlled selects (Radix Select does not submit to FormData by itself)
   const [sex, setSex] = useState<'male' | 'female'>('male')
@@ -25,7 +27,7 @@ export default function OnboardingPage() {
   >('moderate')
   const [goal, setGoal] = useState<'cut' | 'maintain' | 'bulk'>('cut')
 
-  // IMPORTANT: we pass the server action directly so redirect works
+  // IMPORTANT: pass the server action directly so redirect works
   const action = computeAndSaveTargets.bind(null)
 
   return (
@@ -36,7 +38,10 @@ export default function OnboardingPage() {
         </CardHeader>
         <CardContent>
           <form action={action} className="space-y-4">
-            {/* Hidden inputs so Select values are posted */}
+            {/* Preserve target redirect */}
+            <input type="hidden" name="next" value={next} />
+
+            {/* Hidden inputs so Radix Select values are posted */}
             <input type="hidden" name="sex" value={sex} />
             <input type="hidden" name="activity" value={activity} />
             <input type="hidden" name="goal" value={goal} />

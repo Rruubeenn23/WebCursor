@@ -86,7 +86,7 @@ export default function TodayPage() {
       setLoading(true)
       const today = getCurrentDate()
 
-      // Goals (último registro del usuario o DEFAULT)
+      // Goals (último registro del usuario o redirect a onboarding)
       const goalsResp = await supabase
         .from('goals')
         .select('kcal_target, protein_g, carbs_g, fat_g')
@@ -96,6 +96,13 @@ export default function TodayPage() {
         .maybeSingle()
 
       const goalsRow = (goalsResp.data as GoalsRow | null) ?? null
+
+      // If user has no goals yet → go to onboarding, then come back to /today
+      if (!goalsRow) {
+        setLoading(false)
+        router.replace('/onboarding?next=%2Ftoday')
+        return
+      }
 
       // Plan de hoy
       const planResp = await supabase
@@ -167,10 +174,10 @@ export default function TodayPage() {
       }
 
       const baseGoals: MacroGoals = {
-        kcal: goalsRow?.kcal_target ?? 2000,
-        protein: goalsRow?.protein_g ?? 150,
-        carbs: goalsRow?.carbs_g ?? 220,
-        fat: goalsRow?.fat_g ?? 60,
+        kcal: goalsRow.kcal_target ?? 2000,
+        protein: goalsRow.protein_g ?? 150,
+        carbs: goalsRow.carbs_g ?? 220,
+        fat: goalsRow.fat_g ?? 60,
       }
 
       const remaining: MacroGoals = {
@@ -188,9 +195,15 @@ export default function TodayPage() {
         .eq('date', today)
         .order('created_at', { ascending: false })
 
-      const workouts: WorkoutRow[] = (wResp.data as any[] | null)?.map(w => ({
-        id: w.id, name: w.name, date: w.date, description: w.description, is_gym: w.is_gym, is_boxing: w.is_boxing
-      })) ?? []
+      const workouts: WorkoutRow[] =
+        (wResp.data as any[] | null)?.map((w) => ({
+          id: w.id,
+          name: w.name,
+          date: w.date,
+          description: w.description,
+          is_gym: w.is_gym,
+          is_boxing: w.is_boxing,
+        })) ?? []
 
       setData({
         goals: baseGoals,
@@ -304,7 +317,10 @@ export default function TodayPage() {
           <h1 className="text-3xl font-bold">Hoy</h1>
           <p className="text-muted-foreground">
             {new Date().toLocaleDateString('es-ES', {
-              weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
             })}
           </p>
         </div>
@@ -323,14 +339,16 @@ export default function TodayPage() {
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Utensils className="h-5 w-5" />
-        <span>
-          {data.trainingDay ? 'Día de entrenamiento' : 'Día de descanso'}
-        </span>
+        <span>{data.trainingDay ? 'Día de entrenamiento' : 'Día de descanso'}</span>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1">
-          <MacroCard goals={data.goals} consumed={data.consumed} title="Progreso del día" />
+          <MacroCard
+            goals={data.goals}
+            consumed={data.consumed}
+            title="Progreso del día"
+          />
         </div>
 
         <div className="lg:col-span-2 space-y-6">
@@ -340,18 +358,31 @@ export default function TodayPage() {
             </CardHeader>
             <CardContent>
               {data.meals.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Aún no has añadido comidas.</div>
+                <div className="text-sm text-muted-foreground">
+                  Aún no has añadido comidas.
+                </div>
               ) : (
                 <div className="space-y-3">
                   {data.meals.map((meal) => (
-                    <div key={meal.id} className="flex items-center justify-between border rounded-lg p-3">
+                    <div
+                      key={meal.id}
+                      className="flex items-center justify-between border rounded-lg p-3"
+                    >
                       <div className="flex items-center gap-3">
                         <button
                           className="text-muted-foreground hover:text-foreground transition"
                           onClick={() => toggleMealDone(meal.id, !meal.done)}
-                          title={meal.done ? 'Marcar como pendiente' : 'Marcar como hecho'}
+                          title={
+                            meal.done
+                              ? 'Marcar como pendiente'
+                              : 'Marcar como hecho'
+                          }
                         >
-                          {meal.done ? <CheckCircle className="h-5 w-5 text-green-600" /> : <Circle className="h-5 w-5" />}
+                          {meal.done ? (
+                            <CheckCircle className="h-5 w-5 text-green-600" />
+                          ) : (
+                            <Circle className="h-5 w-5" />
+                          )}
                         </button>
                         <div>
                           <div className="font-medium">
@@ -395,17 +426,26 @@ export default function TodayPage() {
               ) : (
                 <div className="space-y-3">
                   {data.workouts.map((w) => (
-                    <div key={w.id} className="flex items-center justify-between border rounded-lg p-3">
+                    <div
+                      key={w.id}
+                      className="flex items-center justify-between border rounded-lg p-3"
+                    >
                       <div className="flex items-center gap-3">
                         <Dumbbell className="h-5 w-5" />
                         <div>
                           <div className="font-medium">{w.name}</div>
                           {w.description && (
-                            <div className="text-xs text-muted-foreground">{w.description}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {w.description}
+                            </div>
                           )}
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => router.push('/entrenos')}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.push('/entrenos')}
+                      >
                         Ver
                       </Button>
                     </div>
@@ -441,13 +481,17 @@ export default function TodayPage() {
       <SelectTemplateDialog
         open={openTemplate}
         onOpenChange={setOpenTemplate}
-        onApplied={() => { if (userId) loadTodayData(userId) }}
+        onApplied={() => {
+          if (userId) loadTodayData(userId)
+        }}
       />
 
       <DuplicateDayDialog
         open={openDuplicate}
         onOpenChange={setOpenDuplicate}
-        onCopied={() => { if (userId) loadTodayData(userId) }}
+        onCopied={() => {
+          if (userId) loadTodayData(userId)
+        }}
       />
 
       <AddWorkoutDialog
