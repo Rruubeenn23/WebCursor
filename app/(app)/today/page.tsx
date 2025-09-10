@@ -143,15 +143,10 @@ export default function TodayPage() {
                 fat: Math.round(Number(item.macros_override?.fat ?? 0) * 10) / 10,
               }
             : {
-                kcal: Math.round(
-                  ((item.food?.kcal ?? 0) as number) * (item.qty_units as number)
-                ),
-                protein:
-                  Math.round((((item.food?.protein_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
-                carbs:
-                  Math.round((((item.food?.carbs_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
-                fat:
-                  Math.round((((item.food?.fat_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+                kcal: Math.round(((item.food?.kcal ?? 0) as number) * (item.qty_units as number)),
+                protein: Math.round((((item.food?.protein_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+                carbs: Math.round((((item.food?.carbs_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
+                fat: Math.round((((item.food?.fat_g ?? 0) as number) * (item.qty_units as number)) * 10) / 10,
               }
 
           if (item.done) {
@@ -294,6 +289,11 @@ export default function TodayPage() {
     }
   }
 
+  const goPlanMyDay = () => {
+    const date = getCurrentDate()
+    router.push(`/plan-my-day?date=${encodeURIComponent(date)}`)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -306,6 +306,9 @@ export default function TodayPage() {
     return (
       <div className="text-center py-8">
         <p className="text-muted-foreground">No hay datos para hoy</p>
+        <div className="mt-4">
+          <Button onClick={goPlanMyDay}>Planificar mi día</Button>
+        </div>
       </div>
     )
   }
@@ -325,6 +328,11 @@ export default function TodayPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {/* CTA: Plan my day */}
+          <Button onClick={goPlanMyDay}>
+            Planificar mi día
+          </Button>
+
           <Button variant="outline" onClick={() => setOpenFood(true)}>
             <Utensils className="h-4 w-4 mr-2" /> Añadir comida
           </Button>
@@ -359,7 +367,15 @@ export default function TodayPage() {
             <CardContent>
               {data.meals.length === 0 ? (
                 <div className="text-sm text-muted-foreground">
-                  Aún no has añadido comidas.
+                  Aún no has añadido comidas.{' '}
+                  <button
+                    type="button"
+                    className="underline"
+                    onClick={goPlanMyDay}
+                  >
+                    Genera un plan
+                  </button>
+                  .
                 </div>
               ) : (
                 <div className="space-y-3">
