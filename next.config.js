@@ -1,17 +1,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: true,
+  swcMinify: true,
   images: {
     domains: [
       'lh3.googleusercontent.com',
-      // External sources used by our new API bridges:
-      'static.openfoodfacts.org', // product images
+      'static.openfoodfacts.org',
       'images.openfoodfacts.org',
-      'wger.de' // exercise images/media
+      'wger.de',
     ],
+    formats: ['image/avif', 'image/webp'],
   },
-  experimental: {
-    // Keep default unless you use edge specific features
-  }
+  poweredByHeader: false,
+  compress: true,
 }
 
 module.exports = nextConfig

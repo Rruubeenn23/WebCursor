@@ -4,6 +4,9 @@ import type { Database } from '@/types/database.types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Client-only supabase instance for components/hooks
+export const supabaseBrowser = () => createClientComponentClient<Database>()
+
 
 export const supabase = createClientComponentClient<Database>()
 

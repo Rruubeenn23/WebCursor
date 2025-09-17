@@ -8,6 +8,11 @@ import { Utensils, Plus, Edit, Trash2, Search, Clock } from 'lucide-react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import type { Database } from '@/types/database.types'
 
+import FoodsExplorer from '@/components/foods/foods-explorer'
+import { createServerSupabase } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
+
+
 type Food = Database['public']['Tables']['foods']['Row']
 type MealTemplate = Database['public']['Tables']['meal_templates']['Row'] & {
   items: Array<MealTemplateItem>
@@ -18,7 +23,7 @@ type MealTemplateItem = Database['public']['Tables']['meal_template_items']['Row
 
 const supabaseClient = createClientComponentClient<Database>()
 
-export default function ComidasPage() {
+export default async function ComidasPage() {
   const [user, setUser] = useState<any>(null)
   const [templates, setTemplates] = useState<MealTemplate[]>([])
   const [foods, setFoods] = useState<Food[]>([])
@@ -36,6 +41,14 @@ export default function ComidasPage() {
       time_hint: string
     }>
   })
+  const supabase = createServerSupabase();
+  const { data:{ session } } = await supabase.auth.getSession();
+  if(!session) redirect('/');
+  return (<div className='mx-auto max-w-3xl p-4 space-y-6'>
+    <h1 className='text-2xl font-semibold'>Comidas</h1>
+    <p className='text-sm text-muted-foreground'>Busca en fuentes externas y guarda favoritos.</p>
+    <FoodsExplorer />
+  </div>)
 
   useEffect(() => {
     const fetchUser = async () => {

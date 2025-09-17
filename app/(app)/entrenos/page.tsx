@@ -1,12 +1,14 @@
 import { createServerSupabase } from '@/lib/supabase/server'
 import NewWorkoutForm from './workout-form'
+import ExercisesExplorer from '@/components/exercises/exercises-explorer'
+import { redirect } from 'next/navigation'
 
 export default async function EntrenosPage() {
   const supabase = createServerSupabase()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-
-  // No strong typing here since your DB types don't expose 'workouts' yet.
+  const { data:{ session } } = await supabase.auth.getSession();
+  if(!session) redirect('/');
   const { data } = await (supabase as any)
     .from('workouts')
     .select('*')
@@ -29,4 +31,12 @@ export default async function EntrenosPage() {
       </div>
     </div>
   )
+  return (<div className='mx-auto max-w-3xl p-4 space-y-6'>
+    <h1 className='text-2xl font-semibold'>Entrenos</h1>
+    <p className='text-sm text-muted-foreground'>Busca ejercicios y guarda favoritos.</p>
+    <ExercisesExplorer />
+  </div>)
+
+  // No strong typing here since your DB types don't expose 'workouts' yet.
+  
 }

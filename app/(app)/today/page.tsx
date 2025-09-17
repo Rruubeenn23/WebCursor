@@ -100,7 +100,7 @@ export default function TodayPage() {
       // If user has no goals yet → go to onboarding, then come back to /today
       if (!goalsRow) {
         setLoading(false)
-        router.replace('/onboarding?next=%2Ftoday')
+        router.replace('/ajustes?next=%2Ftoday')
         return
       }
 

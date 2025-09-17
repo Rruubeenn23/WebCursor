@@ -14,32 +14,28 @@ const PUBLIC_PATHS = [
 ]
 
 function isPublicPath(pathname: string) {
-  if (PUBLIC_PATHS.includes(pathname)) return true
   return (
-    pathname.startsWith('/auth/') ||
-    pathname.startsWith('/onboarding') ||
-    pathname.startsWith('/api/') ||
+    PUBLIC_PATHS.includes(pathname) ||
+    pathname.startsWith('/api/health') ||
     pathname.startsWith('/_next') ||
-    pathname.startsWith('/static') ||
-    pathname.startsWith('/assets') ||
     pathname.startsWith('/favicon') ||
-    pathname.includes('.') // files like /robots.txt, /sitemap.xml, /images/*.png
+    pathname.startsWith('/robots.txt') ||
+    pathname.startsWith('/sitemap.xml') ||
+    pathname.startsWith('/assets') ||
+    pathname.startsWith('/static') ||
+    pathname.startsWith('/images')
   )
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+  const res = NextResponse.next()
 
-  // Allow public paths
   if (isPublicPath(pathname)) {
-    return NextResponse.next()
+    return res
   }
 
-  // Create a response we can mutate (supabase will refresh cookies here)
-  const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
-
-  // Get current user (fast; uses auth cookies)
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -49,7 +45,7 @@ export async function middleware(req: NextRequest) {
     return res
   }
 
-  // Determine onboarding completion
+  // Onboarding is now inside Ajustes; no redirect logic here.
   const completedViaMetadata =
     user.user_metadata?.onboarding_completed === true ||
     user.user_metadata?.onboarding_completed === 'true'
@@ -58,21 +54,6 @@ export async function middleware(req: NextRequest) {
     req.cookies.get('onboarding_complete')?.value === 'true'
 
   const hasCompleted = completedViaMetadata || completedViaCookie
-
-  // Force onboarding if not completed
-  if (!hasCompleted && !pathname.startsWith('/onboarding')) {
-    const url = req.nextUrl.clone()
-    url.pathname = '/onboarding'
-    url.searchParams.set('next', pathname)
-    return NextResponse.redirect(url)
-  }
-
-  // Keep completed users out of /onboarding
-  if (hasCompleted && pathname.startsWith('/onboarding')) {
-    const url = req.nextUrl.clone()
-    url.pathname = DASHBOARD_PATH
-    return NextResponse.redirect(url)
-  }
 
   return res
 }
