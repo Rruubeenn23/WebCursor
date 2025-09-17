@@ -19,6 +19,9 @@ export default async function EntrenosPage() {
   return (
     <div className="mx-auto max-w-3xl p-4 space-y-6">
       <h1 className="text-2xl font-semibold">Entrenos</h1>
+      <h1 className='text-2xl font-semibold'>Entrenos</h1>
+      <p className='text-sm text-muted-foreground'>Busca ejercicios y guarda favoritos.</p>
+      <ExercisesExplorer />
       {/* Default to today's date string */}
       <NewWorkoutForm defaultDate={new Date().toISOString().slice(0, 10)} />
       <div className="space-y-2">
@@ -30,13 +33,5 @@ export default async function EntrenosPage() {
         ))}
       </div>
     </div>
-  )
-  return (<div className='mx-auto max-w-3xl p-4 space-y-6'>
-    <h1 className='text-2xl font-semibold'>Entrenos</h1>
-    <p className='text-sm text-muted-foreground'>Busca ejercicios y guarda favoritos.</p>
-    <ExercisesExplorer />
-  </div>)
-
-  // No strong typing here since your DB types don't expose 'workouts' yet.
-  
+  )  
 }
